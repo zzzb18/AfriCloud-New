@@ -112,8 +112,35 @@ deactivate
 - `transformers`, `torch` - 深度学习模型
 - `openai` - OpenAI API集成
 - `python-docx` - Word文档支持
+- `openai-whisper` - 语音转文字（Whisper模型）
+- `SpeechRecognition` - 语音转文字（在线识别）
 
 > 💡 **提示**: 如果只需要基本功能，安装 `requirements-base.txt` 即可。可选依赖用于增强功能（AI分析、OCR等）。
+
+### 语音识别依赖（ffmpeg）
+
+如果使用Whisper进行语音转文字，需要安装ffmpeg：
+
+**Windows:**
+- 下载：https://ffmpeg.org/download.html
+- 或使用Chocolatey：`choco install ffmpeg`
+- 安装后确保ffmpeg在系统PATH中
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# CentOS/RHEL
+sudo yum install ffmpeg
+```
+
+> 💡 **提示**: 如果不想安装ffmpeg，可以使用 `speech_recognition` 方法（需要网络连接）。
 
 ## 🔧 配置
 

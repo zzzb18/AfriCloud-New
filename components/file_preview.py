@@ -4,7 +4,7 @@ import pandas as pd
 import io
 from core.storage_manager import CloudStorageManager
 from utils.dependencies import PDF_AVAILABLE, WHISPER_AVAILABLE, SPEECH_RECOGNITION_AVAILABLE
-from utils.speech_to_text import transcribe_audio, get_available_methods
+from utils.speech_to_text import transcribe_audio, get_available_methods, check_ffmpeg
 
 
 def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int):
@@ -199,42 +199,37 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
             # 显示音频播放器
             st.audio(audio_data, format="audio/wav")
             
-            # 选择识别方法
-            if len(available_methods) > 1:
-                selected_method = st.radio(
-                    "选择识别方法",
-                    options=available_methods,
-                    key=f"method_select_{file_id}",
-                    horizontal=True
-                )
-            elif len(available_methods) == 1:
-                selected_method = available_methods[0]
+            # 检查是否有可用的识别方法
+            if len(available_methods) == 0:
+                # 没有可用方法时显示提示
+                st.warning("⚠️ 没有可用的语音识别方法")
+                if WHISPER_AVAILABLE and not check_ffmpeg():
+                    st.info("💡 请安装ffmpeg以使用Whisper，或安装speech_recognition库")
+                elif not WHISPER_AVAILABLE and not SPEECH_RECOGNITION_AVAILABLE:
+                    st.info("💡 请安装语音识别库：`pip install openai-whisper SpeechRecognition`")
             else:
-                selected_method = None
-                st.warning("没有可用的语音识别方法，请安装 whisper 或 speech_recognition")
-            
-            # 转文字按钮
-            if selected_method and st.button("🔄 转换为文字", key=f"transcribe_{file_id}", type="primary"):
-                with st.spinner("正在识别语音..."):
-                    # 获取音频字节数据（Streamlit的audio_input返回BytesIO）
-                    if hasattr(audio_data, 'read'):
-                        # 重置到开头
-                        audio_data.seek(0)
-                        audio_bytes = audio_data.read()
-                    else:
-                        audio_bytes = audio_data
-                    
-                    # 调用语音转文字
-                    transcribed_text = transcribe_audio(audio_bytes, method=selected_method)
-                    
-                    if transcribed_text:
-                        # 将识别结果填入输入框
-                        st.session_state[f"ai_question_{file_id}"] = transcribed_text
-                        st.success(f"✅ 识别成功: {transcribed_text}")
-                        st.session_state[f"show_audio_recorder_{file_id}"] = False
-                        st.rerun()
-                    else:
-                        st.error("❌ 语音识别失败，请重试")
+                # 转文字按钮（自动选择最佳方法）
+                if st.button("🔄 转换为文字", key=f"transcribe_{file_id}", type="primary", use_container_width=True):
+                    with st.spinner("正在识别语音..."):
+                        # 获取音频字节数据（Streamlit的audio_input返回BytesIO）
+                        if hasattr(audio_data, 'read'):
+                            # 重置到开头
+                            audio_data.seek(0)
+                            audio_bytes = audio_data.read()
+                        else:
+                            audio_bytes = audio_data
+                        
+                        # 自动选择最佳方法进行识别（无需用户选择）
+                        transcribed_text = transcribe_audio(audio_bytes)
+                        
+                        if transcribed_text:
+                            # 将识别结果填入输入框
+                            st.session_state[f"ai_question_{file_id}"] = transcribed_text
+                            st.success(f"✅ 识别成功")
+                            st.session_state[f"show_audio_recorder_{file_id}"] = False
+                            st.rerun()
+                        else:
+                            st.error("❌ 语音识别失败，请重试")
         
         # 关闭录音区域按钮
         if st.button("❌ 关闭", key=f"close_recorder_{file_id}"):
