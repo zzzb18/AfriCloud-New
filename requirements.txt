@@ -30,3 +30,9 @@ xlrd>=2.0.0
 # Word文档支持（可选）
 python-docx>=0.8.11
 
+# 语音识别支持（可选）
+openai-whisper>=20231117
+SpeechRecognition>=3.10.0
+# 注意：pyaudio在某些系统上可能需要额外配置，如果安装失败可以跳过
+# pyaudio>=0.2.11
+
