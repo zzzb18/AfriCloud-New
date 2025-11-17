@@ -11,7 +11,11 @@ class AuthManager:
     """User authentication manager"""
     
     def __init__(self, db_path: str = "cloud_storage/storage.db"):
-        self.db_path = db_path
+        # 确保数据库目录存在
+        db_path_obj = Path(db_path)
+        db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        
+        self.db_path = str(db_path_obj)
         self._init_database()
     
     def _init_database(self):

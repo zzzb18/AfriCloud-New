@@ -92,89 +92,104 @@ class CloudStorageManager:
 
     def init_database(self):
         """初始化数据库"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        # 文件表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS files (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT NOT NULL,
-                file_path TEXT NOT NULL,
-                file_size INTEGER,
-                file_type TEXT,
-                folder_id INTEGER,
-                upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                checksum TEXT,
-                is_cached BOOLEAN DEFAULT FALSE,
-                FOREIGN KEY (folder_id) REFERENCES folders (id)
-            )
-        ''')
-
-        # 文件夹表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS folders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                folder_name TEXT NOT NULL,
-                parent_folder_id INTEGER,
-                created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (parent_folder_id) REFERENCES folders (id)
-            )
-        ''')
-
-        # 上传进度表（用于断点续传）
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS upload_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT NOT NULL,
-                total_size INTEGER,
-                uploaded_size INTEGER,
-                chunk_size INTEGER,
-                checksum TEXT,
-                upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-        # AI分析结果表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ai_analysis (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_id INTEGER,
-                analysis_type TEXT,
-                industry_category TEXT,
-                extracted_text TEXT,
-                key_phrases TEXT,
-                summary TEXT,
-                confidence_score REAL,
-                method TEXT,
-                analysis_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (file_id) REFERENCES files (id)
-            )
-        ''')
-
-        # 迁移：若旧表无 method 列则补充
         try:
-            cursor.execute("PRAGMA table_info(ai_analysis)")
-            cols = [row[1] for row in cursor.fetchall()]
-            if 'method' not in cols:
-                cursor.execute('ALTER TABLE ai_analysis ADD COLUMN method TEXT')
-        except Exception:
-            pass
+            # 确保数据库目录存在（双重保险）
+            db_path_obj = Path(self.db_path)
+            db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
 
-        # 行业分类表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS industry_categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category_name TEXT UNIQUE,
-                keywords TEXT,
-                description TEXT,
-                created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+            # 文件表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    file_size INTEGER,
+                    file_type TEXT,
+                    folder_id INTEGER,
+                    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    checksum TEXT,
+                    is_cached BOOLEAN DEFAULT FALSE,
+                    FOREIGN KEY (folder_id) REFERENCES folders (id)
+                )
+            ''')
 
-        conn.commit()
-        conn.close()
+            # 文件夹表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS folders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    folder_name TEXT NOT NULL,
+                    parent_folder_id INTEGER,
+                    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (parent_folder_id) REFERENCES folders (id)
+                )
+            ''')
+
+            # 上传进度表（用于断点续传）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS upload_progress (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT NOT NULL,
+                    total_size INTEGER,
+                    uploaded_size INTEGER,
+                    chunk_size INTEGER,
+                    checksum TEXT,
+                    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            # AI分析结果表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS ai_analysis (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_id INTEGER,
+                    analysis_type TEXT,
+                    industry_category TEXT,
+                    extracted_text TEXT,
+                    key_phrases TEXT,
+                    summary TEXT,
+                    confidence_score REAL,
+                    method TEXT,
+                    analysis_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (file_id) REFERENCES files (id)
+                )
+            ''')
+
+            # 迁移：若旧表无 method 列则补充
+            try:
+                cursor.execute("PRAGMA table_info(ai_analysis)")
+                cols = [row[1] for row in cursor.fetchall()]
+                if 'method' not in cols:
+                    cursor.execute('ALTER TABLE ai_analysis ADD COLUMN method TEXT')
+            except Exception:
+                pass
+
+            # 行业分类表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS industry_categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category_name TEXT UNIQUE,
+                    keywords TEXT,
+                    description TEXT,
+                    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            import os
+            error_msg = f"数据库初始化失败: {str(e)}\n数据库路径: {self.db_path}\n目录存在: {os.path.exists(db_path_obj.parent)}"
+            print(f"[ERROR] {error_msg}")
+            raise RuntimeError(error_msg) from e
+        except Exception as e:
+            import os
+            error_msg = f"数据库初始化时发生未知错误: {str(e)}\n数据库路径: {self.db_path}"
+            print(f"[ERROR] {error_msg}")
+            raise RuntimeError(error_msg) from e
 
     def init_ai_models(self):
         """初始化AI模型"""
