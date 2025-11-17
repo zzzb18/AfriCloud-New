@@ -165,12 +165,25 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
     col_text, col_mic = st.columns([5, 1])
     
     with col_text:
-        user_question = st.text_area(
-            "Enter your question",
-            placeholder="e.g., What is the main content of this file? What trends are in the data?",
-            height=100,
-            key=f"ai_question_{file_id}"
-        )
+        # 检查是否有转录的文本需要填入
+        transcribed_text_key = f"transcribed_text_{file_id}"
+        transcribed_value = st.session_state.get(transcribed_text_key, "")
+        
+        # 构建text_area的参数
+        text_area_params = {
+            "label": "Enter your question",
+            "placeholder": "e.g., What is the main content of this file? What trends are in the data?",
+            "height": 100,
+            "key": f"ai_question_{file_id}"
+        }
+        
+        # 如果有转录文本，设置value并清除标记
+        if transcribed_value:
+            text_area_params["value"] = transcribed_value
+            # 清除转录文本，避免下次自动填入
+            del st.session_state[transcribed_text_key]
+        
+        user_question = st.text_area(**text_area_params)
     
     with col_mic:
         st.markdown("<br>", unsafe_allow_html=True)  # 垂直对齐
@@ -223,8 +236,8 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
                         transcribed_text = transcribe_audio(audio_bytes)
                         
                         if transcribed_text:
-                            # 将识别结果填入输入框
-                            st.session_state[f"ai_question_{file_id}"] = transcribed_text
+                            # 将识别结果存储到单独的key中，然后通过rerun更新text_area
+                            st.session_state[f"transcribed_text_{file_id}"] = transcribed_text
                             st.success(f"✅ 识别成功")
                             st.session_state[f"show_audio_recorder_{file_id}"] = False
                             st.rerun()
