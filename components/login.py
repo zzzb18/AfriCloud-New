@@ -72,9 +72,13 @@ def render_login_page(auth_manager: AuthManager):
                 else:
                     result = auth_manager.register_user(username, password, email)
                     if result.get("success"):
-                        st.success(f"✅ Account created successfully! Please login.")
-                        # Auto switch to login tab
-                        st.session_state.show_login_tab = True
+                        # 注册成功后自动登录
+                        st.session_state.session_token = result["session_token"]
+                        st.session_state.user_id = result["user_id"]
+                        st.session_state.username = result["username"]
+                        st.session_state.email = result.get("email", "")
+                        
+                        st.success(f"✅ Account created successfully! Welcome, {result['username']}!")
                         st.rerun()
                     else:
                         st.error(f"❌ {result.get('error', 'Registration failed')}")

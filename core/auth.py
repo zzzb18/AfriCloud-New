@@ -74,10 +74,27 @@ class AuthManager:
                 ''', (username, password_hash, email))
                 
                 user_id = cursor.lastrowid
+                
+                # 注册成功后自动创建session（自动登录）
+                session_token = secrets.token_urlsafe(32)
+                import datetime
+                expires_at = datetime.datetime.now() + datetime.timedelta(days=7)
+                
+                cursor.execute('''
+                    INSERT INTO sessions (user_id, session_token, expires_at)
+                    VALUES (?, ?, ?)
+                ''', (user_id, session_token, expires_at))
+                
                 conn.commit()
                 conn.close()
                 
-                return {"success": True, "user_id": user_id, "username": username}
+                return {
+                    "success": True,
+                    "user_id": user_id,
+                    "username": username,
+                    "session_token": session_token,
+                    "email": email
+                }
             except sqlite3.IntegrityError:
                 conn.close()
                 return {"success": False, "error": "Username already exists"}
