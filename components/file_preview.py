@@ -7,7 +7,7 @@ from utils.dependencies import PDF_AVAILABLE
 
 
 def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int):
-    """Render file preview modal"""
+    """Render file preview page"""
     # Get file info directly by file_id (not dependent on folder)
     print(f"[DEBUG] file_preview: Attempting to preview file - ID: {file_id}")
     file = storage_manager.get_file_by_id(file_id)
@@ -15,31 +15,25 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
     if not file:
         print(f"[DEBUG] file_preview: File not found - ID: {file_id}")
         st.error(f"File not found (ID: {file_id})")
+        # 返回按钮
+        if st.button("← Back to File List", use_container_width=True):
+            st.session_state.viewing_file_id = None
+            st.rerun()
         return
     
     print(f"[DEBUG] file_preview: File found - Name: {file.get('filename')}, Path: {file.get('file_path')}")
     
-    # Preview modal styles
-    st.markdown("""
-    <style>
-    .preview-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    # 返回按钮
+    if st.button("← Back to File List", type="secondary", use_container_width=True):
+        st.session_state.viewing_file_id = None
+        if f"ai_response_{file_id}" in st.session_state:
+            del st.session_state[f"ai_response_{file_id}"]
+        st.rerun()
+    
+    st.markdown("---")
     
     # Preview area
-    st.markdown("---")
-    st.markdown(f"#### 📄 {file.get('filename', 'Unknown')}")
+    st.markdown(f"## 📄 {file.get('filename', 'Unknown')}")
     
     # File information
     col1, col2, col3, col4 = st.columns(4)
@@ -214,10 +208,10 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
         st.markdown("#### 🤖 AI Response")
         st.markdown(st.session_state[f"ai_response_{file_id}"])
     
-    # Close button
+    # 底部返回按钮（可选，顶部已有）
     st.markdown("---")
-    if st.button("❌ Close Preview", key=f"close_preview_{file_id}", use_container_width=True):
-        st.session_state[f"preview_file_{file_id}"] = False
+    if st.button("← Back to File List", key=f"back_to_list_{file_id}", use_container_width=True, type="secondary"):
+        st.session_state.viewing_file_id = None
         if f"ai_response_{file_id}" in st.session_state:
             del st.session_state[f"ai_response_{file_id}"]
         st.rerun()

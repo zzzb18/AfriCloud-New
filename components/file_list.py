@@ -42,7 +42,7 @@ def render_list_view(storage_manager: CloudStorageManager, files: List[Dict[str,
         with col2:
             # Clickable filename
             if st.button(f"📄 {file.get('filename', 'Unknown')}", key=f"file_name_{file_id}", use_container_width=True):
-                st.session_state[f"preview_file_{file_id}"] = True
+                st.session_state.viewing_file_id = file_id
                 st.rerun()
         with col3:
             st.caption(storage_manager.format_file_size(file.get('file_size', 0)))
@@ -105,7 +105,7 @@ def render_thumbnail_view(storage_manager: CloudStorageManager, files: List[Dict
                         
                         # Preview button
                         if st.button("👁️ Preview", key=f"thumb_preview_{file['id']}", use_container_width=True):
-                            st.session_state[f"preview_file_{file['id']}"] = True
+                            st.session_state.viewing_file_id = file['id']
                             st.rerun()
                         
                         # Action buttons

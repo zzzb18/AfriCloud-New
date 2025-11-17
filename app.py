@@ -76,6 +76,10 @@ if 'show_new_folder_dialog' not in st.session_state:
 if 'selected_industry_category' not in st.session_state:
     st.session_state.selected_industry_category = None
 
+# 页面状态：文件列表页或文件详情页
+if 'viewing_file_id' not in st.session_state:
+    st.session_state.viewing_file_id = None
+
 # ==================== Left Sidebar Tabs ====================
 with st.sidebar:
     st.markdown("""
@@ -139,69 +143,65 @@ with st.sidebar:
         render_tools_sidebar(storage_manager)
 
 # ==================== Main Content Area ====================
-# Top action bar - cloud storage style
-col_upload, col_new_folder, col_sep1, col_view, col_refresh = st.columns([2, 1.5, 0.2, 1, 1])
+# 检查是否在查看文件详情页
+viewing_file_id = st.session_state.get('viewing_file_id')
 
-with col_upload:
-    if st.button("↑ Upload", type="primary", use_container_width=True):
-        st.session_state.show_upload = not st.session_state.get('show_upload', False)
+# 只在文件列表页显示顶部操作栏
+if not viewing_file_id:
+    # Top action bar - cloud storage style
+    col_upload, col_new_folder, col_sep1, col_view, col_refresh = st.columns([2, 1.5, 0.2, 1, 1])
 
-with col_new_folder:
-    # New folder button - using popover for instant creation
-    with st.popover("📁 New Folder", help="Create a new folder", use_container_width=True):
-        folder_name = st.text_input("Folder Name", placeholder="Enter folder name", key="popover_folder_name")
-        col_ok, col_cancel = st.columns(2)
-        with col_ok:
-            if st.button("Create", type="primary", use_container_width=True, key="popover_create"):
-                if folder_name:
-                    result = storage_manager.create_folder(folder_name, st.session_state.current_folder_id)
-                    if result["success"]:
-                        st.success(f"✅ Created successfully!") 
-                        st.rerun()
+    with col_upload:
+        if st.button("↑ Upload", type="primary", use_container_width=True):
+            st.session_state.show_upload = not st.session_state.get('show_upload', False)
+
+    with col_new_folder:
+        # New folder button - using popover for instant creation
+        with st.popover("📁 New Folder", help="Create a new folder", use_container_width=True):
+            folder_name = st.text_input("Folder Name", placeholder="Enter folder name", key="popover_folder_name")
+            col_ok, col_cancel = st.columns(2)
+            with col_ok:
+                if st.button("Create", type="primary", use_container_width=True, key="popover_create"):
+                    if folder_name:
+                        result = storage_manager.create_folder(folder_name, st.session_state.current_folder_id)
+                        if result["success"]:
+                            st.success(f"✅ Created successfully!") 
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {result.get('error', 'Unknown error')}")
                     else:
-                        st.error(f"❌ {result.get('error', 'Unknown error')}")
-                else:
-                    st.warning("Please enter a name")
-        with col_cancel:
-            if st.button("Cancel", use_container_width=True, key="popover_cancel"):
-                pass
+                        st.warning("Please enter a name")
+            with col_cancel:
+                if st.button("Cancel", use_container_width=True, key="popover_cancel"):
+                    pass
 
-with col_sep1:
-    st.markdown("<div style='color: #ddd;'>|</div>", unsafe_allow_html=True)  # Separator
+    with col_sep1:
+        st.markdown("<div style='color: #ddd;'>|</div>", unsafe_allow_html=True)  # Separator
 
-with col_view:
-    view_mode = st.radio(
-        "View",
-        options=["List", "Thumbnail"],
-    horizontal=True,
-        key="view_mode_selector",
-        label_visibility="collapsed"
-    )
-    st.session_state.view_mode = "list" if view_mode == "List" else "thumbnail"
+    with col_view:
+        view_mode = st.radio(
+            "View",
+            options=["List", "Thumbnail"],
+        horizontal=True,
+            key="view_mode_selector",
+            label_visibility="collapsed"
+        )
+        st.session_state.view_mode = "list" if view_mode == "List" else "thumbnail"
 
-with col_refresh:
-    if st.button("🔄 Refresh", use_container_width=True):
-        st.rerun()
+    with col_refresh:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.rerun()
 
-st.markdown("---")
-
-# Check if there are files to preview
-preview_file_id = None
-for key in st.session_state.keys():
-    if key.startswith("preview_file_") and st.session_state[key]:
-        preview_file_id = int(key.replace("preview_file_", ""))
-        break
-
-# If there's a preview request, show preview modal
-if preview_file_id:
-    render_file_preview_modal(storage_manager, preview_file_id)
     st.markdown("---")
 
 # Main content based on selected tab
 current_tab = st.session_state.get('current_tab', 'Home')
 
-# Render content based on current tab
-if current_tab == "Industry View":
+# Render content based on current tab and page state
+if viewing_file_id:
+    # 文件详情页
+    render_file_preview_modal(storage_manager, viewing_file_id)
+elif current_tab == "Industry View":
     # Industry view content
     if st.session_state.get('selected_industry_category'):
         render_industry_view(storage_manager)
