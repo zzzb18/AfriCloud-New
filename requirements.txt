@@ -1,0 +1,32 @@
+streamlit>=1.50.0
+pandas>=1.5.0
+numpy>=1.24.0
+Pillow>=9.0.0
+requests>=2.28.0
+jieba>=0.42.1
+matplotlib>=3.6.0
+seaborn>=0.12.0
+
+# PDF支持（可选）
+PyMuPDF>=1.23.0
+
+# OCR支持（可选）
+easyocr>=1.7.0
+
+# 机器学习支持（可选）
+scikit-learn>=1.2.0
+
+# 深度学习支持（可选）
+transformers>=4.30.0
+torch>=2.0.0
+
+# OpenAI支持（可选）
+openai>=1.0.0
+
+# Excel支持
+openpyxl>=3.1.0
+xlrd>=2.0.0
+
+# Word文档支持（可选）
+python-docx>=0.8.11
+

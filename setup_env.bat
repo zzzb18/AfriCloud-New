@@ -1,0 +1,29 @@
+@echo off
+REM Windows批处理脚本：设置虚拟环境
+
+echo 正在创建虚拟环境...
+python -m venv venv
+
+echo 正在激活虚拟环境...
+call venv\Scripts\activate.bat
+
+echo 正在升级pip...
+python -m pip install --upgrade pip
+
+echo 正在安装依赖包...
+pip install -r requirements.txt
+
+echo.
+echo ========================================
+echo 环境配置完成！
+echo ========================================
+echo.
+echo 使用以下命令激活虚拟环境：
+echo   venv\Scripts\activate
+echo.
+echo 然后运行应用：
+echo   python -m streamlit run app.py
+echo.
+
+pause
+
