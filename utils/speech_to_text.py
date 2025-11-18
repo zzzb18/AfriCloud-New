@@ -232,7 +232,7 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
         
         try:
             # 使用whisper进行转录
-            result = st.session_state.whisper_model.transcribe(tmp_path, language="zh")
+            result = st.session_state.whisper_model.transcribe(tmp_path, language="en")
             text = result.get("text", "").strip()
             return text if text else None
         finally:
@@ -306,11 +306,11 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
         
         # 尝试使用Google Speech Recognition（免费，需要网络）
         try:
-            text = recognizer.recognize_google(audio, language="zh-CN")
+            text = recognizer.recognize_google(audio, language="en-US")
             return text.strip() if text else None
         except sr.UnknownValueError:
             # 无法识别音频内容（可能是噪音或语言不匹配）
-            st.error("无法识别音频内容，请确保：\n1. 录音清晰无噪音\n2. 使用中文语音\n3. 录音时间足够长")
+            st.error("无法识别音频内容，请确保：\n1. 录音清晰无噪音\n2. 使用英文语音\n3. 录音时间足够长")
             return None
         except sr.RequestError as e:
             # 网络错误或服务不可用
@@ -322,7 +322,7 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
             # 尝试使用离线识别（如果可用）
             try:
                 # 使用sphinx作为离线备选（需要安装pocketsphinx）
-                text = recognizer.recognize_sphinx(audio, language="zh-CN")
+                text = recognizer.recognize_sphinx(audio, language="en-US")
                 return text.strip() if text else None
             except Exception:
                 return None
