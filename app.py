@@ -90,9 +90,9 @@ if 'viewing_file_id' not in st.session_state:
 # ==================== Left Sidebar Tabs ====================
 with st.sidebar:
     st.markdown("""
-    <div style="padding: 16px 0; border-bottom: 1px solid #e8e8e8; margin-bottom: 20px;">
+    <div style="padding: 12px 0 8px 0; border-bottom: 1px solid #e8e8e8; margin-bottom: 8px;">
         <h2 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 600;">{}</h2>
-        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">{}</p>
+        <p style="margin: 2px 0 0 0; color: #64748b; font-size: 12px;">{}</p>
     </div>
     """.format(get_text("app_title"), get_text("app_subtitle")), unsafe_allow_html=True)
 
@@ -115,12 +115,16 @@ with st.sidebar:
         set_language(selected_lang_code)
         st.rerun()
 
+    st.markdown("<div style='margin-top: 4px; margin-bottom: 4px;'></div>", unsafe_allow_html=True)
+
     # User info
     render_user_info(auth_manager)
 
     # Tab selection using buttons instead of st.tabs to better control content visibility
     # This allows us to explicitly track which tab is active
     
+    st.markdown("<div style='margin-top: 4px; margin-bottom: 4px;'></div>", unsafe_allow_html=True)
+
     # Tab buttons
     col_home, col_industry, col_tools = st.columns(3)
     
@@ -144,7 +148,7 @@ with st.sidebar:
             st.session_state.selected_industry_category = None  # Clear industry category when switching to Tools
             st.rerun()
     
-    st.markdown("---")
+    st.markdown("<div style='margin-top: 4px; margin-bottom: 4px;'></div>", unsafe_allow_html=True)
 
     # Render sidebar content based on current tab
     current_tab = st.session_state.get('current_tab', 'Home')

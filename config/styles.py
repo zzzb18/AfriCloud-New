@@ -119,6 +119,32 @@ CSS_STYLES = """
         background: white;
         border-right: 1px solid #e8e8e8;
     }
+    
+    /* 减少侧边栏组件间距 */
+    [data-testid="stSidebar"] .element-container {
+        margin-bottom: 8px !important;
+    }
+    
+    [data-testid="stSidebar"] .stSelectbox {
+        margin-bottom: 8px !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton {
+        margin-bottom: 4px !important;
+    }
+    
+    [data-testid="stSidebar"] hr {
+        margin: 8px 0 !important;
+    }
+    
+    /* 减少标题和副标题间距 */
+    [data-testid="stSidebar"] h2 {
+        margin-bottom: 4px !important;
+    }
+    
+    [data-testid="stSidebar"] p {
+        margin-bottom: 4px !important;
+    }
 
     /* 工具栏样式 */
     .toolbar {
