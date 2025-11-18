@@ -656,32 +656,32 @@ class CloudStorageManager:
                                 with st.spinner("🔍 Converting PDF to images and recognizing text..."):
                                     for page_num in range(max_pages):
                                         try:
-                                        page = doc[page_num]
+                                            page = doc[page_num]
                                             # 降低缩放比例以节省内存（从2倍降到1.5倍）
                                             pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
-                                        img_data = pix.tobytes("png")
-                                        
+                                            img_data = pix.tobytes("png")
+                                            
                                             # 检查图片大小，如果太大则跳过
                                             img_size_mb = len(img_data) / (1024 * 1024)
                                             if img_size_mb > 10:  # 如果单页图片超过10MB，跳过
                                                 print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页图片过大({img_size_mb:.2f}MB)，跳过")
                                                 continue
-                                        
-                                        # 保存临时图片
-                                        import tempfile
-                                        import os
-                                        temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                                        temp_img.write(img_data)
-                                        temp_img.close()
-                                        temp_images.append(temp_img.name)
-                                        
-                                        # 对每页进行OCR
-                                        print(f"[DEBUG] generate_ai_report: 处理PDF第 {page_num + 1} 页...")
+                                            
+                                            # 保存临时图片
+                                            import tempfile
+                                            import os
+                                            temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                                            temp_img.write(img_data)
+                                            temp_img.close()
+                                            temp_images.append(temp_img.name)
+                                            
+                                            # 对每页进行OCR
+                                            print(f"[DEBUG] generate_ai_report: 处理PDF第 {page_num + 1} 页...")
                                             try:
-                                        page_results = self.ocr_reader.readtext(temp_img.name)
-                                        
-                                        if page_results and len(page_results) > 0:
-                                            page_text = ' '.join([result[1] for result in page_results])
+                                                page_results = self.ocr_reader.readtext(temp_img.name)
+                                                
+                                                if page_results and len(page_results) > 0:
+                                                    page_text = ' '.join([result[1] for result in page_results])
                                                     all_ocr_text.append(f"Page {page_num + 1}:\n{page_text}")
                                             except MemoryError as e:
                                                 print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页OCR内存不足: {str(e)}")
@@ -777,9 +777,9 @@ class CloudStorageManager:
                                 ocr_file_path = file_path
                             
                             try:
-                            with st.spinner("🔍 Recognizing text in image..."):
+                                with st.spinner("🔍 Recognizing text in image..."):
                                     results = self.ocr_reader.readtext(ocr_file_path)
-                            print(f"[DEBUG] generate_ai_report: OCR识别完成，结果数量: {len(results) if results else 0}")
+                                print(f"[DEBUG] generate_ai_report: OCR识别完成，结果数量: {len(results) if results else 0}")
                             except MemoryError as e:
                                 print(f"[DEBUG] generate_ai_report: OCR识别内存不足: {str(e)}")
                                 st.error("❌ OCR recognition failed: Insufficient memory. The image may be too large.")
