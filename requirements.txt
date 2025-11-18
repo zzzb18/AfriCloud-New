@@ -33,6 +33,7 @@ python-docx>=0.8.11
 # 语音识别支持（可选）
 openai-whisper>=20231117
 SpeechRecognition>=3.10.0
+pydub>=0.25.1  # 用于音频格式转换（WebM转WAV）
 # 注意：pyaudio在某些系统上可能需要额外配置，如果安装失败可以跳过
 # pyaudio>=0.2.11
 

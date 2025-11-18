@@ -165,25 +165,15 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
     col_text, col_mic = st.columns([5, 1])
     
     with col_text:
-        # 检查是否有转录的文本需要填入
-        transcribed_text_key = f"transcribed_text_{file_id}"
-        transcribed_value = st.session_state.get(transcribed_text_key, "")
+        text_area_key = f"ai_question_{file_id}"
         
-        # 构建text_area的参数
-        text_area_params = {
-            "label": "Enter your question",
-            "placeholder": "e.g., What is the main content of this file? What trends are in the data?",
-            "height": 100,
-            "key": f"ai_question_{file_id}"
-        }
-        
-        # 如果有转录文本，设置value并清除标记
-        if transcribed_value:
-            text_area_params["value"] = transcribed_value
-            # 清除转录文本，避免下次自动填入
-            del st.session_state[transcribed_text_key]
-        
-        user_question = st.text_area(**text_area_params)
+        # 直接使用text_area，它会自动从session_state读取值
+        user_question = st.text_area(
+            "Enter your question",
+            placeholder="e.g., What is the main content of this file? What trends are in the data?",
+            height=100,
+            key=text_area_key
+        )
     
     with col_mic:
         st.markdown("<br>", unsafe_allow_html=True)  # 垂直对齐
@@ -224,25 +214,39 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
                 # 转文字按钮（自动选择最佳方法）
                 if st.button("🔄 转换为文字", key=f"transcribe_{file_id}", type="primary", use_container_width=True):
                     with st.spinner("正在识别语音..."):
-                        # 获取音频字节数据（Streamlit的audio_input返回BytesIO）
-                        if hasattr(audio_data, 'read'):
-                            # 重置到开头
-                            audio_data.seek(0)
-                            audio_bytes = audio_data.read()
-                        else:
-                            audio_bytes = audio_data
-                        
-                        # 自动选择最佳方法进行识别（无需用户选择）
-                        transcribed_text = transcribe_audio(audio_bytes)
-                        
-                        if transcribed_text:
-                            # 将识别结果存储到单独的key中，然后通过rerun更新text_area
-                            st.session_state[f"transcribed_text_{file_id}"] = transcribed_text
-                            st.success(f"✅ 识别成功")
-                            st.session_state[f"show_audio_recorder_{file_id}"] = False
-                            st.rerun()
-                        else:
-                            st.error("❌ 语音识别失败，请重试")
+                        try:
+                            # 获取音频字节数据（Streamlit的audio_input返回BytesIO）
+                            if hasattr(audio_data, 'read'):
+                                # 重置到开头
+                                audio_data.seek(0)
+                                audio_bytes = audio_data.read()
+                            else:
+                                audio_bytes = audio_data
+                            
+                            # 检查音频数据是否为空
+                            if not audio_bytes or len(audio_bytes) == 0:
+                                st.error("❌ 音频数据为空，请重新录制")
+                            else:
+                                # 自动选择最佳方法进行识别（无需用户选择）
+                                transcribed_text = transcribe_audio(audio_bytes)
+                                
+                                if transcribed_text and transcribed_text.strip():
+                                    # 直接更新text_area的key对应的值（在rerun之前）
+                                    text_area_key = f"ai_question_{file_id}"
+                                    # 如果key不存在，直接设置；如果存在，需要先删除再设置
+                                    if text_area_key in st.session_state:
+                                        # 使用特殊方法更新：先清除，再设置
+                                        del st.session_state[text_area_key]
+                                    st.session_state[text_area_key] = transcribed_text
+                                    
+                                    st.success(f"✅ 识别成功: {transcribed_text[:50]}...")
+                                    st.session_state[f"show_audio_recorder_{file_id}"] = False
+                                    st.rerun()
+                                else:
+                                    # 错误信息已经在transcribe_audio函数中显示，这里只显示通用提示
+                                    st.warning("⚠️ 语音识别失败，请重试。如果问题持续，请检查：\n1. 网络连接（如果使用在线识别）\n2. 音频质量\n3. 是否安装了必要的依赖库")
+                        except Exception as e:
+                            st.error(f"❌ 处理音频时发生错误: {str(e)}")
         
         # 关闭录音区域按钮
         if st.button("❌ 关闭", key=f"close_recorder_{file_id}"):

@@ -4,6 +4,7 @@ import io
 import tempfile
 import os
 import shutil
+import subprocess
 from typing import Optional
 
 # 检查语音识别库是否可用
@@ -20,10 +21,94 @@ try:
 except ImportError:
     WHISPER_AVAILABLE = False
 
+# 检查pydub是否可用（用于音频格式转换）
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+
 
 def check_ffmpeg() -> bool:
     """检查ffmpeg是否可用"""
     return shutil.which("ffmpeg") is not None
+
+
+def convert_audio_to_wav(audio_data: bytes, input_format: str = "webm") -> Optional[bytes]:
+    """
+    将音频数据转换为WAV格式
+    
+    Args:
+        audio_data: 原始音频字节数据
+        input_format: 输入音频格式（默认webm，Streamlit audio_input的默认格式）
+    
+    Returns:
+        转换后的WAV格式字节数据，失败返回None
+    """
+    # 如果audio_data是BytesIO对象，需要先读取
+    if hasattr(audio_data, 'read'):
+        audio_bytes = audio_data.read()
+        audio_data.seek(0)  # 重置位置
+    else:
+        audio_bytes = audio_data
+    
+    # 方法1: 使用pydub转换（如果可用）
+    if PYDUB_AVAILABLE:
+        try:
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format=input_format)
+            wav_buffer = io.BytesIO()
+            audio_segment.export(wav_buffer, format="wav")
+            return wav_buffer.getvalue()
+        except Exception as e:
+            st.warning(f"使用pydub转换失败: {str(e)}，尝试使用ffmpeg")
+    
+    # 方法2: 使用ffmpeg转换（如果可用）
+    if check_ffmpeg():
+        try:
+            # 创建临时输入文件
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{input_format}") as input_file:
+                input_file.write(audio_bytes)
+                input_path = input_file.name
+            
+            # 创建临时输出文件
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as output_file:
+                output_path = output_file.name
+            
+            try:
+                # 使用ffmpeg转换
+                subprocess.run(
+                    [
+                        "ffmpeg", "-y", "-i", input_path,
+                        "-ar", "16000",  # 采样率16kHz
+                        "-ac", "1",      # 单声道
+                        "-f", "wav",
+                        output_path
+                    ],
+                    check=True,
+                    capture_output=True,
+                    stderr=subprocess.DEVNULL
+                )
+                
+                # 读取转换后的文件
+                with open(output_path, "rb") as f:
+                    wav_data = f.read()
+                
+                return wav_data
+            finally:
+                # 清理临时文件
+                for path in [input_path, output_path]:
+                    if os.path.exists(path):
+                        os.unlink(path)
+        except Exception as e:
+            st.warning(f"使用ffmpeg转换失败: {str(e)}")
+    
+    # 方法3: 如果输入已经是WAV格式，直接返回
+    # 检查是否是WAV格式（WAV文件头以"RIFF"开头）
+    if audio_bytes[:4] == b'RIFF':
+        return audio_bytes
+    
+    # 如果所有方法都失败，返回None
+    return None
 
 
 def transcribe_audio(audio_data: bytes, method: str = None) -> Optional[str]:
@@ -94,14 +179,22 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
         else:
             audio_bytes = audio_data
         
+        # 尝试转换音频格式（如果需要）
+        wav_data = convert_audio_to_wav(audio_bytes, input_format="webm")
+        if wav_data is None:
+            # 如果转换失败，尝试直接使用原始数据
+            wav_data = audio_bytes
+        
+        # 保存到临时文件
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-            tmp_file.write(audio_bytes)
+            tmp_file.write(wav_data)
             tmp_path = tmp_file.name
         
         try:
             # 使用whisper进行转录
             result = st.session_state.whisper_model.transcribe(tmp_path, language="zh")
-            return result["text"]
+            text = result.get("text", "").strip()
+            return text if text else None
         finally:
             # 清理临时文件
             if os.path.exists(tmp_path):
@@ -133,29 +226,63 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
     try:
         recognizer = sr.Recognizer()
         
+        # 如果audio_data是BytesIO对象，需要先读取
+        if hasattr(audio_data, 'read'):
+            audio_bytes = audio_data.read()
+            audio_data.seek(0)  # 重置位置
+        else:
+            audio_bytes = audio_data
+        
+        # 尝试转换音频格式为WAV（speech_recognition需要WAV格式）
+        wav_data = convert_audio_to_wav(audio_bytes, input_format="webm")
+        if wav_data is None:
+            # 如果转换失败，尝试直接使用原始数据（可能是WAV格式）
+            wav_data = audio_bytes
+        
         # 将字节数据转换为AudioData对象
-        audio_file = io.BytesIO(audio_data)
-        with sr.AudioFile(audio_file) as source:
-            audio = recognizer.record(source)
+        audio_file = io.BytesIO(wav_data)
+        
+        try:
+            with sr.AudioFile(audio_file) as source:
+                # 调整环境噪音（可选，但有助于提高识别准确度）
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                audio = recognizer.record(source)
+        except Exception as e:
+            # 如果AudioFile无法读取，可能是格式问题
+            error_msg = f"无法读取音频文件: {str(e)}"
+            if "could not find codec" in str(e).lower() or "format" in str(e).lower():
+                error_msg += "\n\n提示：音频格式可能不支持，请尝试安装pydub: pip install pydub"
+            st.error(error_msg)
+            return None
         
         # 尝试使用Google Speech Recognition（免费，需要网络）
         try:
             text = recognizer.recognize_google(audio, language="zh-CN")
-            return text
+            return text.strip() if text else None
         except sr.UnknownValueError:
-            st.error("无法识别音频内容")
+            # 无法识别音频内容（可能是噪音或语言不匹配）
+            st.error("无法识别音频内容，请确保：\n1. 录音清晰无噪音\n2. 使用中文语音\n3. 录音时间足够长")
             return None
         except sr.RequestError as e:
-            st.error(f"语音识别服务错误: {str(e)}")
+            # 网络错误或服务不可用
+            error_msg = f"语音识别服务错误: {str(e)}"
+            if "network" in str(e).lower() or "connection" in str(e).lower():
+                error_msg += "\n\n提示：请检查网络连接，Google Speech Recognition需要网络访问"
+            st.error(error_msg)
+            
             # 尝试使用离线识别（如果可用）
             try:
                 # 使用sphinx作为离线备选（需要安装pocketsphinx）
                 text = recognizer.recognize_sphinx(audio, language="zh-CN")
-                return text
-            except:
+                return text.strip() if text else None
+            except Exception:
                 return None
     except Exception as e:
-        st.error(f"语音识别失败: {str(e)}")
+        error_msg = f"语音识别失败: {str(e)}"
+        # 提供更详细的错误信息
+        if "AudioFile" in str(e) or "format" in str(e).lower():
+            error_msg += "\n\n提示：音频格式可能不支持，请尝试安装pydub: pip install pydub"
+        st.error(error_msg)
         return None
 
 
