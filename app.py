@@ -12,6 +12,7 @@ from components.file_upload import render_upload_section
 from components.file_preview import render_file_preview_modal
 from components.industry_view import render_industry_view, render_industry_view_sidebar
 from components.login import render_login_page, render_user_info
+from config.languages import get_text, get_current_language, set_language, get_available_languages, get_language_name
 
 # Try to import fitz (PDF support)
 try:
@@ -90,10 +91,31 @@ if 'viewing_file_id' not in st.session_state:
 with st.sidebar:
     st.markdown("""
     <div style="padding: 16px 0; border-bottom: 1px solid #e8e8e8; margin-bottom: 20px;">
-        <h2 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 600;">🌾 AI Cloud Storage</h2>
-        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">Intelligent File Management Platform</p>
+        <h2 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 600;">{}</h2>
+        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 12px;">{}</p>
     </div>
-    """, unsafe_allow_html=True)
+    """.format(get_text("app_title"), get_text("app_subtitle")), unsafe_allow_html=True)
+
+    # Language switcher
+    current_lang = get_current_language()
+    lang_options = get_available_languages()
+    lang_names = [get_language_name(lang) for lang in lang_options]
+    selected_lang_index = lang_options.index(current_lang) if current_lang in lang_options else 0
+    
+    selected_lang_name = st.selectbox(
+        "🌐 Language / Lugha",
+        options=lang_names,
+        index=selected_lang_index,
+        key="language_selector"
+    )
+    
+    # Update language if changed
+    selected_lang_code = lang_options[lang_names.index(selected_lang_name)]
+    if selected_lang_code != current_lang:
+        set_language(selected_lang_code)
+        st.rerun()
+    
+    st.markdown("---")
 
     # User info
     render_user_info(auth_manager)

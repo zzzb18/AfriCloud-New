@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 from core.storage_manager import CloudStorageManager
+from config.languages import get_text
 
 
 def render_file_type_sidebar(storage_manager: CloudStorageManager):
@@ -9,12 +10,12 @@ def render_file_type_sidebar(storage_manager: CloudStorageManager):
     
     # File type configuration (icon, name, type value)
     file_type_configs = [
-        {"icon": "🖼️", "name": "Images", "type": "image", "key": "sidebar_image"},
-        {"icon": "📄", "name": "Documents", "type": "application", "key": "sidebar_doc"},
-        {"icon": "📊", "name": "Spreadsheets", "type": "excel", "key": "sidebar_excel"},
-        {"icon": "🎥", "name": "Videos", "type": "video", "key": "sidebar_video"},
-        {"icon": "🎵", "name": "Audio", "type": "audio", "key": "sidebar_audio"},
-        {"icon": "📦", "name": "Others", "type": "unknown", "key": "sidebar_other"},
+        {"icon": "🖼️", "name": get_text("images"), "type": "image", "key": "sidebar_image"},
+        {"icon": "📄", "name": get_text("documents"), "type": "application", "key": "sidebar_doc"},
+        {"icon": "📊", "name": get_text("spreadsheets"), "type": "excel", "key": "sidebar_excel"},
+        {"icon": "🎥", "name": get_text("videos"), "type": "video", "key": "sidebar_video"},
+        {"icon": "🎵", "name": get_text("audio"), "type": "audio", "key": "sidebar_audio"},
+        {"icon": "📦", "name": get_text("others"), "type": "unknown", "key": "sidebar_other"},
     ]
     
     # Initialize selected file type
@@ -34,11 +35,11 @@ def render_file_type_sidebar(storage_manager: CloudStorageManager):
     ">
         <div style="display: flex; align-items: center; gap: 8px;">
             <span style="color: #1976d2; font-size: 14px; font-weight: 500;">▼</span>
-            <span style="color: #1976d2; font-size: 14px; font-weight: 500;">My Files</span>
+            <span style="color: #1976d2; font-size: 14px; font-weight: 500;">{}</span>
         </div>
         <span style="color: #1976d2; font-size: 16px; cursor: pointer;">⋯</span>
     </div>
-    """, unsafe_allow_html=True)
+    """.format(get_text("my_files")), unsafe_allow_html=True)
     
     # File type list container styles
     st.markdown("""

@@ -1,32 +1,33 @@
 """Login and registration components"""
 import streamlit as st
 from core.auth import AuthManager
+from config.languages import get_text
 
 
 def render_login_page(auth_manager: AuthManager):
     """Render login page"""
     st.markdown("""
     <div style="text-align: center; padding: 40px 0;">
-        <h1 style="color: #1e293b; margin-bottom: 10px;">🌾 AI Cloud Storage</h1>
-        <p style="color: #64748b; font-size: 16px;">Intelligent File Management Platform</p>
+        <h1 style="color: #1e293b; margin-bottom: 10px;">{}</h1>
+        <p style="color: #64748b; font-size: 16px;">{}</p>
     </div>
-    """, unsafe_allow_html=True)
+    """.format(get_text("app_title"), get_text("app_subtitle")), unsafe_allow_html=True)
     
     # Login/Register tabs
-    tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
+    tab1, tab2 = st.tabs([f"🔐 {get_text('login')}", f"📝 {get_text('register')}"])
     
     with tab1:
-        st.markdown("### Login to your account")
+        st.markdown(f"### {get_text('login_title')}")
         
         with st.form("login_form"):
-            username = st.text_input("Username", placeholder="Enter your username")
-            password = st.text_input("Password", type="password", placeholder="Enter your password")
+            username = st.text_input(get_text("username"), placeholder=get_text("enter_username"))
+            password = st.text_input(get_text("password"), type="password", placeholder=get_text("enter_password"))
             
             col1, col2 = st.columns([1, 1])
             with col1:
-                login_button = st.form_submit_button("Login", type="primary", use_container_width=True)
+                login_button = st.form_submit_button(get_text("login"), type="primary", use_container_width=True)
             with col2:
-                if st.form_submit_button("Clear", use_container_width=True):
+                if st.form_submit_button(get_text("clear"), use_container_width=True):
                     st.rerun()
             
             if login_button:
@@ -39,32 +40,32 @@ def render_login_page(auth_manager: AuthManager):
                         st.session_state.username = result["username"]
                         st.session_state.email = result.get("email", "")
                         
-                        st.success(f"✅ Welcome back, {result['username']}!")
+                        st.success(get_text("welcome_back").format(result['username']))
                         st.rerun()
                     else:
-                        st.error(f"❌ {result.get('error', 'Login failed')}")
+                        st.error(f"❌ {result.get('error', get_text('login_failed'))}")
                 else:
-                    st.warning("Please enter both username and password")
+                    st.warning(get_text("please_enter_username_password"))
     
     with tab2:
-        st.markdown("### Create a new account")
+        st.markdown(f"### {get_text('register_title')}")
         
         with st.form("register_form"):
-            username = st.text_input("Username", placeholder="Choose a username", key="reg_username")
-            password = st.text_input("Password", type="password", placeholder="Choose a password (min 6 characters)", key="reg_password")
+            username = st.text_input(get_text("username"), placeholder=get_text("enter_username"), key="reg_username")
+            password = st.text_input(get_text("password"), type="password", placeholder=get_text("enter_password"), key="reg_password")
             confirm_password = st.text_input("Confirm Password", type="password", placeholder="Confirm your password", key="reg_confirm_password")
-            email = st.text_input("Email (Optional)", placeholder="your.email@example.com", key="reg_email")
+            email = st.text_input(f"{get_text('email')} (Optional)", placeholder="your.email@example.com", key="reg_email")
             
             col1, col2 = st.columns([1, 1])
             with col1:
-                register_button = st.form_submit_button("Register", type="primary", use_container_width=True)
+                register_button = st.form_submit_button(get_text("register"), type="primary", use_container_width=True)
             with col2:
-                if st.form_submit_button("Clear", use_container_width=True):
+                if st.form_submit_button(get_text("clear"), use_container_width=True):
                     st.rerun()
             
             if register_button:
                 if not username or not password:
-                    st.warning("Please enter username and password")
+                    st.warning(get_text("please_enter_username_password"))
                 elif password != confirm_password:
                     st.error("❌ Passwords do not match")
                 elif len(password) < 6:
@@ -78,10 +79,10 @@ def render_login_page(auth_manager: AuthManager):
                         st.session_state.username = result["username"]
                         st.session_state.email = result.get("email", "")
                         
-                        st.success(f"✅ Account created successfully! Welcome, {result['username']}!")
+                        st.success(get_text("registration_success"))
                         st.rerun()
                     else:
-                        st.error(f"❌ {result.get('error', 'Registration failed')}")
+                        st.error(f"❌ {result.get('error', get_text('registration_failed'))}")
 
 
 def render_user_info(auth_manager: AuthManager):
@@ -90,7 +91,7 @@ def render_user_info(auth_manager: AuthManager):
         st.markdown("---")
         st.markdown(f"**👤 {st.session_state.username}**")
         
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button(f"🚪 {get_text('logout')}", use_container_width=True):
             if 'session_token' in st.session_state:
                 auth_manager.logout_user(st.session_state.session_token)
             
