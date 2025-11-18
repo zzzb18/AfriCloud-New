@@ -179,23 +179,23 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
     with col_mic:
         st.markdown("<br>", unsafe_allow_html=True)  # 垂直对齐
         # 麦克风按钮
-        mic_clicked = st.button("🎤", key=f"mic_button_{file_id}", help="语音输入", use_container_width=True)
+        mic_clicked = st.button("🎤", key=f"mic_button_{file_id}", help="Voice Input", use_container_width=True)
         
         # 检查是否有可用的语音识别方法
         available_methods = get_available_methods()
         if not available_methods:
-            st.caption("⚠️ 需要安装语音识别库")
+            st.caption("⚠️ Speech recognition library required")
     
     # 语音录制区域
     if mic_clicked or st.session_state.get(f"show_audio_recorder_{file_id}", False):
         st.session_state[f"show_audio_recorder_{file_id}"] = True
         
         st.markdown("---")
-        st.markdown("**🎤 语音输入**")
+        st.markdown("**🎤 Voice Input**")
         
         # 使用Streamlit的音频输入组件
         audio_data = st.audio_input(
-            "点击录制按钮开始录音",
+            "Click the record button to start recording",
             key=f"audio_input_{file_id}"
         )
         
@@ -206,11 +206,11 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
             # 检查是否有可用的识别方法
             if len(available_methods) == 0:
                 # 没有可用方法时显示提示
-                st.warning("⚠️ 没有可用的语音识别方法")
+                st.warning("⚠️ No speech recognition methods available")
                 if WHISPER_AVAILABLE and not check_ffmpeg():
-                    st.info("💡 请安装ffmpeg以使用Whisper，或安装speech_recognition库")
+                    st.info("💡 Please install ffmpeg to use Whisper, or install speech_recognition library")
                 elif not WHISPER_AVAILABLE and not SPEECH_RECOGNITION_AVAILABLE:
-                    st.info("💡 请安装语音识别库：`pip install openai-whisper SpeechRecognition`")
+                    st.info("💡 Please install speech recognition libraries: `pip install openai-whisper SpeechRecognition`")
             else:
                 # 获取音频字节数据用于检测是否有新音频
                 if hasattr(audio_data, 'read'):
@@ -231,11 +231,11 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
                     st.session_state[audio_hash_key] = current_audio_hash
                     
                     # 自动触发识别
-                    with st.spinner("🎤 正在自动识别语音..."):
+                    with st.spinner("🎤 Auto transcribing speech..."):
                         try:
                             # 检查音频数据是否为空
                             if not audio_bytes or len(audio_bytes) == 0:
-                                st.error("❌ 音频数据为空，请重新录制")
+                                st.error("❌ Audio data is empty, please record again")
                             else:
                                 # 自动选择最佳方法进行识别（无需用户选择）
                                 transcribed_text = transcribe_audio(audio_bytes)
@@ -249,7 +249,7 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
                                         del st.session_state[text_area_key]
                                     st.session_state[text_area_key] = transcribed_text
                                     
-                                    st.success(f"✅ 识别成功: {transcribed_text[:50]}...")
+                                    st.success(f"✅ Transcription successful: {transcribed_text[:50]}...")
                                     st.session_state[f"show_audio_recorder_{file_id}"] = False
                                     # 清除音频哈希，以便下次录音时可以重新识别
                                     if audio_hash_key in st.session_state:
@@ -257,17 +257,17 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
                                     st.rerun()
                                 else:
                                     # 错误信息已经在transcribe_audio函数中显示，这里只显示通用提示
-                                    st.warning("⚠️ 语音识别失败，请重试。如果问题持续，请检查：\n1. 网络连接（如果使用在线识别）\n2. 音频质量\n3. 是否安装了必要的依赖库")
+                                    st.warning("⚠️ Speech recognition failed, please try again. If the problem persists, please check:\n1. Network connection (if using online recognition)\n2. Audio quality\n3. Whether necessary dependency libraries are installed")
                         except Exception as e:
-                            st.error(f"❌ 处理音频时发生错误: {str(e)}")
+                            st.error(f"❌ Error processing audio: {str(e)}")
                 else:
                     # 如果已经识别过当前音频，显示已识别的文本（如果有）
                     text_area_key = f"ai_question_{file_id}"
                     if text_area_key in st.session_state and st.session_state[text_area_key]:
-                        st.info(f"📝 已识别: {st.session_state[text_area_key][:100]}...")
+                        st.info(f"📝 Transcribed: {st.session_state[text_area_key][:100]}...")
         
         # 关闭录音区域按钮
-        if st.button("❌ 关闭", key=f"close_recorder_{file_id}"):
+        if st.button("❌ Close", key=f"close_recorder_{file_id}"):
             st.session_state[f"show_audio_recorder_{file_id}"] = False
             st.rerun()
         

@@ -233,27 +233,13 @@ class CloudStorageManager:
         self.deepseek_model = "deepseek-chat"  # 或 "deepseek-coder" 用于代码生成
         # 注意：如果使用DeepSeek-V3，模型名称应为 "deepseek-chat"
 
-        # 初始化OCR模型
+        # 初始化OCR模型 - 延迟加载，避免启动时内存不足导致进程被杀死
         self.ocr_reader = None
         self.ocr_loading = False
-        print(f"[DEBUG] OCR初始化开始 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}")
-        if OCR_AVAILABLE and easyocr is not None:
-            try:
-                # 异步加载OCR模型，避免阻塞界面
-                print("[DEBUG] 开始加载OCR模型...")
-                st.info("🔄 Loading OCR model, please wait...")
-                self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
-                print("[DEBUG] ✅ OCR模型加载成功")
-                st.success("✅ OCR model loaded successfully")
-            except Exception as e:
-                print(f"[DEBUG] ❌ OCR模型加载失败: {str(e)}")
-                print(f"[DEBUG] 错误类型: {type(e).__name__}")
-                import traceback
-                print(f"[DEBUG] 错误堆栈:\n{traceback.format_exc()}")
-                st.warning(f"⚠️ OCR model loading failed: {str(e)}")
-                st.info("💡 Please click '🔄 Reload AI' to retry later")
-        else:
-            print(f"[DEBUG] OCR不可用 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}")
+        self.ocr_load_failed = False
+        print(f"[DEBUG] OCR初始化 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}")
+        print(f"[DEBUG] OCR模型将延迟加载（仅在需要时加载，避免启动时内存不足）")
+        # 不再在初始化时加载OCR模型，改为延迟加载
 
         # 初始化文本分类模型
         self.text_classifier = None
@@ -641,12 +627,14 @@ class CloudStorageManager:
                     print(f"[DEBUG] generate_ai_report: 数据库中没有OCR内容，开始执行OCR提取")
                 
                     try:
-                        # 确保OCR模型已加载
-                        if self.ocr_reader is None:
-                            print(f"[DEBUG] generate_ai_report: OCR模型未加载，开始加载...")
-                            with st.spinner("🔄 Loading OCR model, please wait..."):
-                                self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
-                            print(f"[DEBUG] generate_ai_report: OCR模型加载成功")
+                        # 延迟加载OCR模型
+                        if not self._load_ocr_model():
+                            print(f"[DEBUG] generate_ai_report: OCR模型加载失败，跳过OCR提取")
+                            file_content = f"File Type: {'Image' if file_type == 'image' else 'PDF'}\n"
+                            file_content += f"Filename: {filename}\n"
+                            file_content += f"Note: OCR model loading failed, unable to extract text from file."
+                            st.warning("⚠️ OCR model loading failed, skipping OCR extraction")
+                            continue
                         
                         # 对于PDF文件，需要先转换为图片
                         ocr_file_path = file_path
@@ -659,12 +647,25 @@ class CloudStorageManager:
                                 doc = fitz.open(file_path)
                                 all_ocr_text = []
                                 
+                                # 限制PDF页数，避免内存溢出
+                                max_pages = min(len(doc), 10)  # 最多处理10页
+                                if len(doc) > max_pages:
+                                    print(f"[DEBUG] generate_ai_report: PDF有{len(doc)}页，只处理前{max_pages}页以节省内存")
+                                    st.info(f"📄 PDF has {len(doc)} pages, processing first {max_pages} pages to save memory")
+                                
                                 with st.spinner("🔍 Converting PDF to images and recognizing text..."):
-                                    for page_num in range(len(doc)):
+                                    for page_num in range(max_pages):
+                                        try:
                                         page = doc[page_num]
-                                        # 将PDF页面转换为图片
-                                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2倍缩放提高OCR精度
+                                            # 降低缩放比例以节省内存（从2倍降到1.5倍）
+                                            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
                                         img_data = pix.tobytes("png")
+                                        
+                                            # 检查图片大小，如果太大则跳过
+                                            img_size_mb = len(img_data) / (1024 * 1024)
+                                            if img_size_mb > 10:  # 如果单页图片超过10MB，跳过
+                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页图片过大({img_size_mb:.2f}MB)，跳过")
+                                                continue
                                         
                                         # 保存临时图片
                                         import tempfile
@@ -676,11 +677,27 @@ class CloudStorageManager:
                                         
                                         # 对每页进行OCR
                                         print(f"[DEBUG] generate_ai_report: 处理PDF第 {page_num + 1} 页...")
+                                            try:
                                         page_results = self.ocr_reader.readtext(temp_img.name)
                                         
                                         if page_results and len(page_results) > 0:
                                             page_text = ' '.join([result[1] for result in page_results])
-                                            all_ocr_text.append(f"第{page_num + 1}页:\n{page_text}")
+                                                    all_ocr_text.append(f"Page {page_num + 1}:\n{page_text}")
+                                            except MemoryError as e:
+                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页OCR内存不足: {str(e)}")
+                                                st.warning(f"⚠️ Page {page_num + 1} OCR failed due to insufficient memory")
+                                                break  # 内存不足时停止处理
+                                            except Exception as e:
+                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页OCR失败: {str(e)}")
+                                                # 继续处理下一页
+                                                continue
+                                        except MemoryError as e:
+                                            print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页处理内存不足: {str(e)}")
+                                            st.warning(f"⚠️ Page {page_num + 1} processing failed due to insufficient memory")
+                                            break
+                                        except Exception as e:
+                                            print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页处理失败: {str(e)}")
+                                            continue
                                 
                                 doc.close()
                                 
@@ -718,9 +735,61 @@ class CloudStorageManager:
                         else:
                             # 图片文件直接OCR
                             print(f"[DEBUG] generate_ai_report: 开始OCR识别图片: {file_path}")
+                            
+                            # 检查图片大小和尺寸，如果太大则缩放
+                            try:
+                                from PIL import Image
+                                img = Image.open(file_path)
+                                img_width, img_height = img.size
+                                file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                                
+                                print(f"[DEBUG] generate_ai_report: 图片尺寸: {img_width}x{img_height}, 文件大小: {file_size_mb:.2f}MB")
+                                
+                                # 如果图片太大，进行缩放
+                                max_dimension = 2000  # 最大尺寸2000像素
+                                max_file_size_mb = 5  # 最大文件大小5MB
+                                
+                                if img_width > max_dimension or img_height > max_dimension or file_size_mb > max_file_size_mb:
+                                    print(f"[DEBUG] generate_ai_report: 图片过大，进行缩放...")
+                                    st.info(f"📷 Image is large ({img_width}x{img_height}, {file_size_mb:.1f}MB), resizing for OCR...")
+                                    
+                                    # 计算缩放比例
+                                    scale = min(max_dimension / img_width, max_dimension / img_height)
+                                    new_width = int(img_width * scale)
+                                    new_height = int(img_height * scale)
+                                    
+                                    # 缩放图片
+                                    img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                                    
+                                    # 保存到临时文件
+                                    import tempfile
+                                    temp_img_path = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                                    temp_img_path.close()
+                                    img_resized.save(temp_img_path.name, 'PNG')
+                                    
+                                    ocr_file_path = temp_img_path.name
+                                    temp_images.append(ocr_file_path)
+                                    print(f"[DEBUG] generate_ai_report: 图片已缩放至: {new_width}x{new_height}")
+                                else:
+                                    ocr_file_path = file_path
+                            except Exception as e:
+                                print(f"[DEBUG] generate_ai_report: 图片检查失败: {str(e)}，使用原始文件")
+                                ocr_file_path = file_path
+                            
+                            try:
                             with st.spinner("🔍 Recognizing text in image..."):
-                                results = self.ocr_reader.readtext(file_path)
+                                    results = self.ocr_reader.readtext(ocr_file_path)
                             print(f"[DEBUG] generate_ai_report: OCR识别完成，结果数量: {len(results) if results else 0}")
+                            except MemoryError as e:
+                                print(f"[DEBUG] generate_ai_report: OCR识别内存不足: {str(e)}")
+                                st.error("❌ OCR recognition failed: Insufficient memory. The image may be too large.")
+                                file_content = f"File Type: Image\n"
+                                file_content += f"Filename: {filename}\n"
+                                file_content += f"Note: OCR recognition failed due to insufficient memory. Please try with a smaller image or disable OCR."
+                                raise  # 重新抛出异常以便外层处理
+                            except Exception as e:
+                                print(f"[DEBUG] generate_ai_report: OCR识别失败: {str(e)}")
+                                raise  # 重新抛出异常以便外层处理
                             
                             if results and len(results) > 0:
                                 ocr_text = ' '.join([result[1] for result in results])
@@ -774,19 +843,19 @@ class CloudStorageManager:
             print(f"[DEBUG] generate_ai_report: ✅ 文件内容提取完成，内容长度: {len(file_content)}")
 
             # 构建提示词
-            system_prompt = """你是一个专业的数据分析助手。请根据用户上传的文件内容，回答用户的问题。
-如果文件是Excel或CSV数据，请提供详细的数据分析、统计信息和洞察。
-如果文件是文档，请根据文档内容回答问题。
-请用中文回答，回答要准确、详细、有条理。"""
+            system_prompt = """You are a professional data analysis assistant. Please answer the user's questions based on the content of the uploaded file.
+If the file is Excel or CSV data, please provide detailed data analysis, statistical information, and insights.
+If the file is a document, please answer questions based on the document content.
+Please answer in English, be accurate, detailed, and well-organized."""
 
             # 限制内容长度避免超出token限制
             file_content_limited = file_content[:8000]
-            user_prompt = f"""文件内容：
+            user_prompt = f"""File content:
 {file_content_limited}
 
-用户问题：{user_question}
+User question: {user_question}
 
-请根据上述文件内容回答用户的问题。"""
+Please answer the user's question based on the above file content."""
 
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -1763,23 +1832,9 @@ class CloudStorageManager:
                 print(f"[DEBUG] OCR状态 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}, ocr_reader: {self.ocr_reader is not None}")
                 
                 if OCR_AVAILABLE and easyocr is not None:
-                    if self.ocr_reader is None:
                         # 延迟加载OCR模型
-                        print("[DEBUG] OCR模型未加载，开始延迟加载...")
-                        st.info("🔄 Loading OCR model, please wait...")
-                        try:
-                            print("[DEBUG] 调用 easyocr.Reader(['ch_sim', 'en'])...")
-                            self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
-                            print("[DEBUG] ✅ OCR模型延迟加载成功")
-                            st.success("✅ OCR model loaded successfully")
-                        except Exception as e:
-                            print(f"[DEBUG] ❌ OCR模型延迟加载失败: {str(e)}")
-                            print(f"[DEBUG] 错误类型: {type(e).__name__}")
-                            import traceback
-                            print(f"[DEBUG] 错误堆栈:\n{traceback.format_exc()}")
-                            st.error(f"❌ OCR model loading failed: {str(e)}")
-                            st.info("💡 Tip: Please check if easyocr library is correctly installed")
-                            # 不返回空字符串，让流程继续，尝试其他方法
+                    if not self._load_ocr_model():
+                        print("[DEBUG] OCR模型加载失败，跳过OCR提取")
                             extracted_text = ""
                     else:
                         # OCR模型已加载，进行识别
@@ -2101,6 +2156,60 @@ class CloudStorageManager:
             # 方法4: 简单截取（最后备用）
             return text[:max_length] + "..." if len(text) > max_length else text
 
+    def _load_ocr_model(self):
+        """延迟加载OCR模型（带错误处理和内存保护）"""
+        if self.ocr_reader is not None:
+            return True
+        
+        if self.ocr_load_failed:
+            print("[DEBUG] OCR模型之前加载失败，跳过重试")
+            return False
+        
+        if not OCR_AVAILABLE or easyocr is None:
+            print("[DEBUG] OCR库不可用")
+            return False
+        
+        if self.ocr_loading:
+            print("[DEBUG] OCR模型正在加载中，请等待...")
+            return False
+        
+        try:
+            self.ocr_loading = True
+            print("[DEBUG] 开始延迟加载OCR模型...")
+            
+            # 检查是否禁用OCR（通过环境变量）
+            import os
+            if os.getenv('DISABLE_OCR', '').lower() in ('1', 'true', 'yes'):
+                print("[DEBUG] OCR已通过环境变量禁用")
+                self.ocr_load_failed = True
+                return False
+            
+            # 默认只加载英文模型（更轻量，减少内存占用）
+            # 如果需要中文，可以通过环境变量 ENABLE_CHINESE_OCR=true 启用
+            enable_chinese = os.getenv('ENABLE_CHINESE_OCR', '').lower() in ('1', 'true', 'yes')
+            languages = ['ch_sim', 'en'] if enable_chinese else ['en']
+            
+            print(f"[DEBUG] 加载OCR模型，语言: {languages}")
+            with st.spinner("🔄 Loading OCR model (this may take a moment and use significant memory)..."):
+                self.ocr_reader = easyocr.Reader(languages, gpu=False)  # 强制使用CPU，避免GPU内存问题
+            print("[DEBUG] ✅ OCR模型加载成功")
+            return True
+        except MemoryError as e:
+            print(f"[DEBUG] ❌ OCR模型加载失败 - 内存不足: {str(e)}")
+            self.ocr_load_failed = True
+            st.error("❌ OCR model loading failed: Insufficient memory. Please consider using a server with more RAM or disable OCR via environment variable DISABLE_OCR=1")
+            return False
+        except Exception as e:
+            print(f"[DEBUG] ❌ OCR模型加载失败: {str(e)}")
+            print(f"[DEBUG] 错误类型: {type(e).__name__}")
+            import traceback
+            print(f"[DEBUG] 错误堆栈:\n{traceback.format_exc()}")
+            self.ocr_load_failed = True
+            st.warning(f"⚠️ OCR model loading failed: {str(e)}")
+            return False
+        finally:
+            self.ocr_loading = False
+    
     def extract_ocr_content(self, file_id: int) -> Optional[str]:
         """提取图片或PDF的OCR内容（用于保存到数据库）"""
         try:
@@ -2121,56 +2230,108 @@ class CloudStorageManager:
 
             ocr_content = None
 
+            # 延迟加载OCR模型
+            if not self._load_ocr_model():
+                print("[DEBUG] extract_ocr_content: OCR模型加载失败，跳过OCR提取")
+                return None
+
             # 对于PDF文件，需要转换为图片后OCR
             if filename.endswith('.pdf') and PDF_AVAILABLE and fitz is not None:
-                if OCR_AVAILABLE and easyocr is not None:
-                    try:
-                        if self.ocr_reader is None:
-                            self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
+                try:
+                    doc = fitz.open(file_path)
+                    all_ocr_text = []
+                    
+                    # 限制PDF页数，避免内存溢出
+                    max_pages = min(len(doc), 10)  # 最多处理10页
+                    if len(doc) > max_pages:
+                        print(f"[DEBUG] PDF有{len(doc)}页，只处理前{max_pages}页以节省内存")
+                    
+                    for page_num in range(max_pages):
+                        page = doc[page_num]
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                        img_data = pix.tobytes("png")
                         
-                        doc = fitz.open(file_path)
-                        all_ocr_text = []
+                        import tempfile
+                        temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                        temp_img.write(img_data)
+                        temp_img.close()
                         
-                        for page_num in range(len(doc)):
-                            page = doc[page_num]
-                            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                            img_data = pix.tobytes("png")
-                            
-                            import tempfile
-                            temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                            temp_img.write(img_data)
-                            temp_img.close()
-                            
+                        try:
+                            page_results = self.ocr_reader.readtext(temp_img.name)
+                            if page_results and len(page_results) > 0:
+                                page_text = ' '.join([result[1] for result in page_results])
+                                all_ocr_text.append(f"Page {page_num + 1}:\n{page_text}")
+                        finally:
                             try:
-                                page_results = self.ocr_reader.readtext(temp_img.name)
-                                if page_results and len(page_results) > 0:
-                                    page_text = ' '.join([result[1] for result in page_results])
-                                    all_ocr_text.append(f"第{page_num + 1}页:\n{page_text}")
-                            finally:
-                                try:
-                                    os.unlink(temp_img.name)
-                                except:
-                                    pass
-                        
-                        doc.close()
-                        
-                        if all_ocr_text:
-                            ocr_content = '\n\n'.join(all_ocr_text)
-                    except Exception as e:
-                        print(f"[DEBUG] extract_ocr_content: PDF OCR失败: {str(e)}")
+                                os.unlink(temp_img.name)
+                            except:
+                                pass
+                    
+                    doc.close()
+                    
+                    if all_ocr_text:
+                        ocr_content = '\n\n'.join(all_ocr_text)
+                except Exception as e:
+                    print(f"[DEBUG] extract_ocr_content: PDF OCR失败: {str(e)}")
             
             # 对于图片文件，直接OCR
             elif file_type == 'image':
-                if OCR_AVAILABLE and easyocr is not None:
-                    try:
-                        if self.ocr_reader is None:
-                            self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
+                try:
+                    # 检查图片大小和尺寸，如果太大则缩放
+                    from PIL import Image
+                    img = Image.open(file_path)
+                    img_width, img_height = img.size
+                    file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                    
+                    print(f"[DEBUG] extract_ocr_content: 图片尺寸: {img_width}x{img_height}, 文件大小: {file_size_mb:.2f}MB")
+                    
+                    # 如果图片太大，进行缩放
+                    max_dimension = 2000  # 最大尺寸2000像素
+                    max_file_size_mb = 5  # 最大文件大小5MB
+                    
+                    ocr_file_path = file_path
+                    temp_img_path = None
+                    
+                    if img_width > max_dimension or img_height > max_dimension or file_size_mb > max_file_size_mb:
+                        print(f"[DEBUG] extract_ocr_content: 图片过大，进行缩放...")
                         
-                        results = self.ocr_reader.readtext(file_path)
+                        # 计算缩放比例
+                        scale = min(max_dimension / img_width, max_dimension / img_height)
+                        new_width = int(img_width * scale)
+                        new_height = int(img_height * scale)
+                        
+                        # 缩放图片
+                        img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                        
+                        # 保存到临时文件
+                        import tempfile
+                        temp_img_path = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                        temp_img_path.close()
+                        img_resized.save(temp_img_path.name, 'PNG')
+                        
+                        ocr_file_path = temp_img_path.name
+                        print(f"[DEBUG] extract_ocr_content: 图片已缩放至: {new_width}x{new_height}")
+                    
+                    try:
+                        results = self.ocr_reader.readtext(ocr_file_path)
                         if results and len(results) > 0:
                             ocr_content = ' '.join([result[1] for result in results])
-                    except Exception as e:
-                        print(f"[DEBUG] extract_ocr_content: 图片OCR失败: {str(e)}")
+                    except MemoryError as e:
+                        print(f"[DEBUG] extract_ocr_content: 图片OCR内存不足: {str(e)}")
+                        ocr_content = None
+                    finally:
+                        # 清理临时文件
+                        if temp_img_path and os.path.exists(temp_img_path.name):
+                            try:
+                                os.unlink(temp_img_path.name)
+                            except:
+                                pass
+                except MemoryError as e:
+                    print(f"[DEBUG] extract_ocr_content: 图片处理内存不足: {str(e)}")
+                    ocr_content = None
+                except Exception as e:
+                    print(f"[DEBUG] extract_ocr_content: 图片OCR失败: {str(e)}")
+                    ocr_content = None
             
             return ocr_content
         except Exception as e:
@@ -2203,21 +2364,21 @@ class CloudStorageManager:
             # 如果配置了DeepSeek API，使用AI分析
             if self.deepseek_api_key:
                 # 构建分析提示词
-                system_prompt = """你是一个专业的文档分析助手。请分析用户上传的文件，提供以下信息：
-1. 文件类型和主要内容概述
-2. 行业分类（如：农业、制造业、医疗、教育、金融、建筑、科技等）
-3. 关键信息提取
-4. 文件摘要（200字以内）
+                system_prompt = """You are a professional document analysis assistant. Please analyze the user's uploaded file and provide the following information:
+1. File type and main content overview
+2. Industry classification (e.g., Agriculture, Manufacturing, Healthcare, Education, Finance, Construction, Technology, etc.)
+3. Key information extraction
+4. File summary (within 200 words)
 
-请用中文回答，格式清晰有条理。"""
+Please answer in English, with clear and organized format."""
 
                 # 限制长度避免超出token限制
                 extracted_text_limited = extracted_text[:6000]
-                user_prompt = f"""请分析以下文件内容：
+                user_prompt = f"""Please analyze the following file content:
 
 {extracted_text_limited}
 
-请提供详细的分析结果。"""
+Please provide detailed analysis results."""
 
                 messages = [
                     {"role": "system", "content": system_prompt},

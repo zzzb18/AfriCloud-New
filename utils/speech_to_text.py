@@ -171,14 +171,29 @@ def transcribe_audio(audio_data: bytes, method: str = None) -> Optional[str]:
             st.error("指定的语音识别方法不可用")
             return None
     
-    # 自动选择最佳方法（优先使用Whisper，如果不可用则使用speech_recognition）
+    # 检查是否禁用Whisper（内存不足时使用此选项）
+    disable_whisper = os.getenv('DISABLE_WHISPER', '').lower() in ('1', 'true', 'yes')
+    whisper_load_failed = st.session_state.get('whisper_load_failed', False)
+    
+    # 自动选择最佳方法
+    # 如果Whisper被禁用或之前加载失败，优先使用speech_recognition（不占用内存）
+    if disable_whisper or whisper_load_failed:
+        print("[DEBUG] Whisper已禁用或加载失败，优先使用speech_recognition（不占用内存）")
+        if SPEECH_RECOGNITION_AVAILABLE:
+            return _transcribe_with_speech_recognition(audio_data)
+        else:
+            st.error("语音识别功能不可用：speech_recognition库未安装")
+            return None
+    
+    # 如果Whisper可用且未禁用，优先尝试Whisper（离线，准确度高）
     if WHISPER_AVAILABLE and check_ffmpeg():
-        # 优先使用Whisper（离线，准确度高）
+        # 尝试使用Whisper
         result = _transcribe_with_whisper(audio_data)
         if result:
             return result
-        # 如果Whisper失败，尝试speech_recognition作为备选
+        # 如果Whisper失败（可能是内存不足），尝试speech_recognition作为备选
         if SPEECH_RECOGNITION_AVAILABLE:
+            print("[DEBUG] Whisper识别失败，尝试使用speech_recognition作为备选")
             return _transcribe_with_speech_recognition(audio_data)
     elif SPEECH_RECOGNITION_AVAILABLE:
         # 如果Whisper不可用，使用speech_recognition
@@ -206,12 +221,87 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
         st.error(error_msg)
         return None
     
+    # 检查是否禁用Whisper（通过环境变量）
+    if os.getenv('DISABLE_WHISPER', '').lower() in ('1', 'true', 'yes'):
+        print("[DEBUG] Whisper已通过环境变量禁用")
+        st.warning("⚠️ Whisper已禁用，请使用其他语音识别方法")
+        return None
+    
     try:
-        # 使用已加载的模型（如果未加载则加载small模型）
+        # 使用已加载的模型（如果未加载则加载tiny模型，更小更省内存）
         if 'whisper_model' not in st.session_state:
-            # 如果模型未加载，尝试加载（正常情况下应该在登录时已加载）
-            with st.spinner("🔄 正在加载Whisper模型..."):
-                st.session_state.whisper_model = whisper.load_model("small")
+            # 检查模型加载失败标记
+            if st.session_state.get('whisper_load_failed', False):
+                print("[DEBUG] Whisper模型之前加载失败，跳过重试")
+                st.warning("⚠️ Whisper模型加载失败，请使用其他语音识别方法或检查服务器内存")
+                return None
+            
+            # 如果模型未加载，尝试加载（延迟加载）
+            print("[DEBUG] 开始延迟加载Whisper模型（tiny模型）...")
+            
+            # 检查模型文件是否存在
+            import time
+            cache_dir = os.path.expanduser("~/.cache/whisper")
+            model_path = os.path.join(cache_dir, "tiny.pt")
+            
+            if os.path.exists(model_path):
+                model_size = os.path.getsize(model_path) / (1024 * 1024)  # MB
+                print(f"[DEBUG] Whisper模型文件已存在: {model_path}, 大小: {model_size:.2f}MB")
+                st.info(f"📦 使用缓存的模型文件（{model_size:.1f}MB），加载中...")
+            else:
+                print(f"[DEBUG] Whisper模型文件不存在，需要下载到: {model_path}")
+                st.info("📥 首次使用，正在下载模型文件（这可能需要几分钟，取决于网络速度）...")
+            
+            start_time = time.time()
+            
+            try:
+                with st.spinner("🔄 正在加载Whisper模型（tiny模型，内存占用更小）..."):
+                    print("[DEBUG] 调用 whisper.load_model('tiny')...")
+                    # 强制刷新输出，确保日志立即显示
+                    import sys
+                    sys.stdout.flush()
+                    
+                    st.session_state.whisper_model = whisper.load_model("tiny")
+                    
+                    load_time = time.time() - start_time
+                    print(f"[DEBUG] ✅ Whisper模型加载成功，耗时: {load_time:.2f}秒")
+                    sys.stdout.flush()
+                    st.success(f"✅ Whisper模型加载成功（耗时{load_time:.1f}秒）")
+            except MemoryError as e:
+                print(f"[DEBUG] ❌ Whisper模型加载失败 - 内存不足: {str(e)}")
+                import traceback
+                print(f"[DEBUG] 错误堆栈:\n{traceback.format_exc()}")
+                st.session_state.whisper_load_failed = True
+                st.error("❌ Whisper模型加载失败：内存不足。请考虑：\n"
+                        "1. 使用更大的服务器内存\n"
+                        "2. 禁用Whisper（设置环境变量 DISABLE_WHISPER=1）\n"
+                        "3. 使用 'speech_recognition' 方法（需要网络连接）")
+                return None
+            except OSError as e:
+                # 可能是系统资源不足（包括内存）
+                error_msg = str(e).lower()
+                if 'memory' in error_msg or 'killed' in error_msg or 'cannot allocate' in error_msg:
+                    print(f"[DEBUG] ❌ Whisper模型加载失败 - 系统资源不足: {str(e)}")
+                    import traceback
+                    print(f"[DEBUG] 错误堆栈:\n{traceback.format_exc()}")
+                    st.session_state.whisper_load_failed = True
+                    st.error("❌ Whisper模型加载失败：系统资源不足（可能是内存不足导致进程被杀死）。\n"
+                            "建议：\n"
+                            "1. 使用更大的服务器内存\n"
+                            "2. 禁用Whisper（设置环境变量 DISABLE_WHISPER=1）\n"
+                            "3. 使用 'speech_recognition' 方法（需要网络连接）")
+                    return None
+                else:
+                    raise  # 重新抛出其他OSError
+            except Exception as e:
+                print(f"[DEBUG] ❌ Whisper模型加载失败: {str(e)}")
+                print(f"[DEBUG] 错误类型: {type(e).__name__}")
+                import traceback
+                print(f"[DEBUG] 错误堆栈:\n{traceback.format_exc()}")
+                st.session_state.whisper_load_failed = True
+                st.error(f"❌ Whisper模型加载失败: {str(e)}\n\n"
+                        "提示：如果频繁出现此错误，可以设置环境变量 DISABLE_WHISPER=1 禁用Whisper")
+                return None
         
         # 将音频数据保存到临时文件
         # 如果audio_data是BytesIO对象，需要先读取
@@ -285,10 +375,10 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
         audio_file = io.BytesIO(wav_data)
         
         try:
-            with sr.AudioFile(audio_file) as source:
+        with sr.AudioFile(audio_file) as source:
                 # 调整环境噪音（可选，但有助于提高识别准确度）
                 recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                audio = recognizer.record(source)
+            audio = recognizer.record(source)
         except Exception as e:
             # 如果AudioFile无法读取，可能是格式问题
             error_msg = f"无法读取音频文件: {str(e)}"
@@ -359,11 +449,32 @@ def get_available_methods() -> list:
 def get_method_info() -> dict:
     """获取各方法的详细信息"""
     info = {}
+    
+    # 检查Whisper状态
+    disable_whisper = os.getenv('DISABLE_WHISPER', '').lower() in ('1', 'true', 'yes')
+    whisper_load_failed = False
+    try:
+        whisper_load_failed = st.session_state.get('whisper_load_failed', False)
+    except:
+        pass
+    
     if WHISPER_AVAILABLE:
-        if check_ffmpeg():
+        if disable_whisper:
+            info["whisper"] = {
+                "available": False,
+                "description": "Whisper（离线，已禁用）",
+                "status": "🚫 已通过环境变量禁用（内存不足时建议禁用）"
+            }
+        elif whisper_load_failed:
+            info["whisper"] = {
+                "available": False,
+                "description": "Whisper（离线，加载失败）",
+                "status": "❌ 加载失败（可能是内存不足）"
+            }
+        elif check_ffmpeg():
             info["whisper"] = {
                 "available": True,
-                "description": "Whisper（离线，需要ffmpeg）",
+                "description": "Whisper（离线，需要ffmpeg，占用内存约500MB-1GB）",
                 "status": "✅ 可用"
             }
         else:
@@ -372,11 +483,13 @@ def get_method_info() -> dict:
                 "description": "Whisper（离线，需要ffmpeg）",
                 "status": "❌ 需要安装ffmpeg"
             }
+    
     if SPEECH_RECOGNITION_AVAILABLE:
         info["speech_recognition"] = {
             "available": True,
-            "description": "SpeechRecognition（在线，需要网络）",
-            "status": "✅ 可用"
+            "description": "SpeechRecognition（在线，需要网络，不占用内存）",
+            "status": "✅ 可用（推荐：内存不足时使用）"
         }
+    
     return info
 
