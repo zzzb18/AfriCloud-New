@@ -71,7 +71,7 @@ if 'whisper_model_loaded' not in st.session_state:
             with loading_placeholder.container():
                 st.info("🔄 正在后台加载Whisper模型（首次加载可能需要一些时间，请稍候...）")
             
-            st.session_state.whisper_model = whisper.load_model("medium")
+            st.session_state.whisper_model = whisper.load_model("small")
             st.session_state.whisper_model_loaded = True
             loading_placeholder.empty()  # Clear loading message
         except Exception as e:
