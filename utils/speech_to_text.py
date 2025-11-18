@@ -207,10 +207,10 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
         return None
     
     try:
-        # 加载模型（使用base模型，较小且速度快）
+        # 加载模型（使用small模型，准确度更高）
         if 'whisper_model' not in st.session_state:
             with st.spinner("🔄 正在加载Whisper模型..."):
-                st.session_state.whisper_model = whisper.load_model("base")
+                st.session_state.whisper_model = whisper.load_model("small")
         
         # 将音频数据保存到临时文件
         # 如果audio_data是BytesIO对象，需要先读取
