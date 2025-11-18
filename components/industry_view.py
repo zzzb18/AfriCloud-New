@@ -2,6 +2,7 @@
 import streamlit as st
 from core.storage_manager import CloudStorageManager
 from components.file_list import render_file_list
+from config.languages import get_text
 from typing import List, Dict, Any
 
 
@@ -12,8 +13,8 @@ def render_industry_view(storage_manager: CloudStorageManager):
     categories = get_industry_categories()
     
     # Display category selection
-    st.markdown("### 📊 Industry Classification View")
-    st.markdown("Browse files organized by agricultural industry categories")
+    st.markdown(f"### 📊 {get_text('industry_classification_view')}")
+    st.markdown(get_text("browse_files_by_category"))
     st.markdown("---")
     
     # Create category cards in a grid layout
@@ -44,12 +45,12 @@ def render_industry_view(storage_manager: CloudStorageManager):
                         {category["name"]}
                     </div>
                     <div style="font-size: 12px; color: #666;">
-                        {file_count} files
+                        {file_count} {get_text('files')}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                if st.button(f"View {category['name']}", key=f"view_category_{category['key']}", use_container_width=True):
+                if st.button(get_text("view").format(category['name']), key=f"view_category_{category['key']}", use_container_width=True):
                     selected_category = category["key"]
                     st.session_state.selected_industry_category = selected_category
                     st.rerun()
@@ -65,7 +66,7 @@ def render_industry_view(storage_manager: CloudStorageManager):
             st.markdown(f"#### {category_info['icon']} {category_info['name']}")
             
             # Back button
-            if st.button("← Back to Categories", key="back_to_categories"):
+            if st.button(f"← {get_text('back_to_categories')}", key="back_to_categories"):
                 st.session_state.selected_industry_category = None
                 st.rerun()
             
@@ -79,22 +80,22 @@ def render_industry_view(storage_manager: CloudStorageManager):
                 view_mode_col, _ = st.columns([1, 4])
                 with view_mode_col:
                     view_mode = st.radio(
-                        "View Mode",
-                        options=["List", "Thumbnail"],
+                        get_text("view_mode"),
+                        options=[get_text("list"), get_text("thumbnail")],
                         horizontal=True,
                         key="industry_view_mode"
                     )
-                    view_mode_value = "list" if view_mode == "List" else "thumbnail"
+                    view_mode_value = "list" if view_mode == get_text("list") else "thumbnail"
                 
                 # Display files
                 render_file_list(storage_manager, files, view_mode_value)
             else:
-                st.info(f"No files found in {category_info['name']} category")
+                st.info(get_text("no_files_in_category").format(category_info['name']))
         else:
             st.session_state.selected_industry_category = None
     else:
         # Show summary statistics
-        st.markdown("#### 📈 Summary Statistics")
+        st.markdown(f"#### 📈 {get_text('summary_statistics')}")
         stats_cols = st.columns(4)
         
         total_files = 0
@@ -106,7 +107,7 @@ def render_industry_view(storage_manager: CloudStorageManager):
         
         if len(categories) > 4:
             with stats_cols[0]:
-                st.metric("Total Files", total_files)
+                st.metric(get_text("total_files"), total_files)
 
 
 def get_industry_categories() -> List[Dict[str, Any]]:
@@ -199,7 +200,7 @@ def get_file_count_by_category(storage_manager: CloudStorageManager, category_ke
 
 def render_industry_view_sidebar(storage_manager: CloudStorageManager):
     """Render sidebar for industry view"""
-    st.markdown("#### 📊 Categories")
+    st.markdown(f"#### 📊 {get_text('categories')}")
     categories = [
         {"key": "Planting", "name": "Crop Production", "icon": "🌾"},
         {"key": "Livestock", "name": "Livestock", "icon": "🐄"},

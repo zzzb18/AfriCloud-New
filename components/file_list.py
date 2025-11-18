@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 from core.storage_manager import CloudStorageManager
+from config.languages import get_text
 from typing import List, Dict, Any, Optional
 
 
@@ -18,7 +19,7 @@ def render_file_list(
         view_mode: View mode ("list" or "thumbnail")
     """
     if not files:
-        st.info("📁 No files yet, click the upload button to start uploading files")
+        st.info(f"📁 {get_text('no_files_yet')}")
         return
     
     if view_mode == "list":
@@ -52,17 +53,17 @@ def render_list_view(storage_manager: CloudStorageManager, files: List[Dict[str,
             upload_time = file.get('upload_time', '')
             st.caption(upload_time[:10] if upload_time else '')
         with col6:
-            st.caption("✅ Cached" if file.get('is_cached') else "☁️ Cloud")
+            st.caption(f"✅ {get_text('cached')}" if file.get('is_cached') else f"☁️ {get_text('cloud')}")
         with col7:
             col_del, col_more = st.columns(2)
             with col_del:
-                if st.button("🗑️", key=f"del_{file_id}", help="Delete"):
+                if st.button("🗑️", key=f"del_{file_id}", help=get_text("delete")):
                     result = storage_manager.delete_file(file_id)
                     if result["success"]:
-                        st.success("Deleted successfully!")
+                        st.success(get_text("deleted_successfully"))
                         st.rerun()
             with col_more:
-                if st.button("⚙️", key=f"more_{file_id}", help="More"):
+                if st.button("⚙️", key=f"more_{file_id}", help=get_text("more")):
                     st.session_state[f"show_menu_{file_id}"] = True
         
         st.divider()
@@ -104,7 +105,7 @@ def render_thumbnail_view(storage_manager: CloudStorageManager, files: List[Dict
                         """, unsafe_allow_html=True)
                         
                         # Preview button
-                        if st.button("👁️ Preview", key=f"thumb_preview_{file['id']}", use_container_width=True):
+                        if st.button(f"👁️ {get_text('preview')}", key=f"thumb_preview_{file['id']}", use_container_width=True):
                             st.session_state.viewing_file_id = file['id']
                             st.rerun()
                         

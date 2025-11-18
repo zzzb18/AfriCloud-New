@@ -103,7 +103,7 @@ with st.sidebar:
     selected_lang_index = lang_options.index(current_lang) if current_lang in lang_options else 0
     
     selected_lang_name = st.selectbox(
-        "🌐 Language / Lugha",
+        f"🌐 {get_text('language')} / {get_text('lugha')}",
         options=lang_names,
         index=selected_lang_index,
         key="language_selector"
@@ -127,20 +127,20 @@ with st.sidebar:
     col_home, col_industry, col_tools = st.columns(3)
     
     with col_home:
-        if st.button("🏠 Home", key="tab_home", use_container_width=True, 
+        if st.button(f"🏠 {get_text('home')}", key="tab_home", use_container_width=True, 
                      type="primary" if st.session_state.get('current_tab') == "Home" else "secondary"):
             st.session_state.current_tab = "Home"
             st.session_state.selected_industry_category = None  # Clear industry category when switching to Home
             st.rerun()
     
     with col_industry:
-        if st.button("📊 Industry View", key="tab_industry", use_container_width=True,
+        if st.button(f"📊 {get_text('industry_view')}", key="tab_industry", use_container_width=True,
                      type="primary" if st.session_state.get('current_tab') == "Industry View" else "secondary"):
             st.session_state.current_tab = "Industry View"
             st.rerun()
     
     with col_tools:
-        if st.button("🛠️ Tools", key="tab_tools", use_container_width=True,
+        if st.button(f"🛠️ {get_text('tools')}", key="tab_tools", use_container_width=True,
                      type="primary" if st.session_state.get('current_tab') == "Tools" else "secondary"):
             st.session_state.current_tab = "Tools"
             st.session_state.selected_industry_category = None  # Clear industry category when switching to Tools
@@ -158,7 +158,7 @@ with st.sidebar:
         
         # Return to root directory button
         if st.session_state.current_folder_id:
-            if st.button("🏠 Back to Root", use_container_width=True):
+            if st.button(f"🏠 {get_text('back_to_root')}", use_container_width=True):
                 st.session_state.current_folder_id = None
                 st.rerun()
     
@@ -180,27 +180,27 @@ if not viewing_file_id:
     col_upload, col_new_folder, col_sep1, col_view, col_refresh = st.columns([2, 1.5, 0.2, 1, 1])
 
     with col_upload:
-        if st.button("↑ Upload", type="primary", use_container_width=True):
+        if st.button(f"↑ {get_text('upload')}", type="primary", use_container_width=True):
             st.session_state.show_upload = not st.session_state.get('show_upload', False)
 
     with col_new_folder:
         # New folder button - using popover for instant creation
-        with st.popover("📁 New Folder", help="Create a new folder", use_container_width=True):
-            folder_name = st.text_input("Folder Name", placeholder="Enter folder name", key="popover_folder_name")
+        with st.popover(f"📁 {get_text('new_folder')}", help=get_text('new_folder'), use_container_width=True):
+            folder_name = st.text_input(get_text("folder_name"), placeholder=get_text("folder_name"), key="popover_folder_name")
             col_ok, col_cancel = st.columns(2)
             with col_ok:
-                if st.button("Create", type="primary", use_container_width=True, key="popover_create"):
+                if st.button(get_text("create"), type="primary", use_container_width=True, key="popover_create"):
                     if folder_name:
                         result = storage_manager.create_folder(folder_name, st.session_state.current_folder_id)
                         if result["success"]:
-                            st.success(f"✅ Created successfully!") 
+                            st.success(f"✅ {get_text('created_successfully')}") 
                             st.rerun()
                         else:
-                            st.error(f"❌ {result.get('error', 'Unknown error')}")
+                            st.error(f"❌ {result.get('error', get_text('unknown_error'))}")
                     else:
-                        st.warning("Please enter a name")
+                        st.warning(get_text("please_enter_name"))
             with col_cancel:
-                if st.button("Cancel", use_container_width=True, key="popover_cancel"):
+                if st.button(get_text("cancel"), use_container_width=True, key="popover_cancel"):
                     pass
 
     with col_sep1:
@@ -208,16 +208,16 @@ if not viewing_file_id:
 
     with col_view:
         view_mode = st.radio(
-            "View",
-            options=["List", "Thumbnail"],
+            get_text("view"),
+            options=[get_text("list"), get_text("thumbnail")],
         horizontal=True,
             key="view_mode_selector",
             label_visibility="collapsed"
         )
-        st.session_state.view_mode = "list" if view_mode == "List" else "thumbnail"
+        st.session_state.view_mode = "list" if view_mode == get_text("list") else "thumbnail"
 
     with col_refresh:
-        if st.button("🔄 Refresh", use_container_width=True):
+        if st.button(f"🔄 {get_text('refresh')}", use_container_width=True):
             st.rerun()
 
     st.markdown("---")
@@ -234,21 +234,21 @@ elif current_tab == "Industry View":
     if st.session_state.get('selected_industry_category'):
         render_industry_view(storage_manager)
     else:
-        st.info("📊 Select a category from the sidebar to view files by industry")
+        st.info(f"📊 {get_text('select_category_from_sidebar')}")
 elif current_tab == "Tools":
     # Tools content
-    st.markdown("### 🛠️ Tools")
-    st.info("Use the tools in the sidebar to access various features")
+    st.markdown(f"### 🛠️ {get_text('tools')}")
+    st.info(get_text("use_tools_in_sidebar"))
 else:
     # Home tab (default) - show upload area and file list
     # Upload area (collapsible)
     if st.session_state.get('show_upload', False):
-        with st.expander("📤 Upload Files", expanded=True):
+        with st.expander(f"📤 {get_text('upload_files')}", expanded=True):
             render_upload_section(storage_manager)
         st.markdown("---")
     
     # File list area
-    st.markdown("### 📁 File List")
+    st.markdown(f"### 📁 {get_text('my_files')}")
 
     # Get files in current folder
     current_folder_id = st.session_state.current_folder_id
@@ -298,8 +298,8 @@ else:
     if files:
         render_file_list(storage_manager, files, st.session_state.view_mode)
     else:
-        st.info("📁 No files yet, click the upload button to start uploading files")
+        st.info(f"📁 {get_text('no_files_yet')}")
 
     # Bottom information
     st.markdown("---")
-    st.caption(f"💾 Total {len(files)} files")
+    st.caption(f"💾 {get_text('total_files').format(len(files))}")
