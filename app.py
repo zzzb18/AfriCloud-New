@@ -115,7 +115,7 @@ with st.sidebar:
         set_language(selected_lang_code)
         st.rerun()
 
-    st.markdown("<div style='margin-top: 4px; margin-bottom: 4px;'></div>", unsafe_allow_html=True)
+    st.markdown("---")
 
     # User info
     render_user_info(auth_manager)
@@ -123,7 +123,7 @@ with st.sidebar:
     # Tab selection using buttons instead of st.tabs to better control content visibility
     # This allows us to explicitly track which tab is active
     
-    st.markdown("<div style='margin-top: 4px; margin-bottom: 4px;'></div>", unsafe_allow_html=True)
+    st.markdown("---")
 
     # Tab buttons
     col_home, col_industry, col_tools = st.columns(3)
@@ -148,7 +148,7 @@ with st.sidebar:
             st.session_state.selected_industry_category = None  # Clear industry category when switching to Tools
             st.rerun()
     
-    st.markdown("<div style='margin-top: 4px; margin-bottom: 4px;'></div>", unsafe_allow_html=True)
+    st.markdown("---")
 
     # Render sidebar content based on current tab
     current_tab = st.session_state.get('current_tab', 'Home')

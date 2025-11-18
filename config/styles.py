@@ -134,7 +134,8 @@ CSS_STYLES = """
     }
     
     [data-testid="stSidebar"] hr {
-        margin: 8px 0 !important;
+        margin: 4px 0 !important;
+        border-top: 1px solid #e8e8e8;
     }
     
     /* 减少标题和副标题间距 */
