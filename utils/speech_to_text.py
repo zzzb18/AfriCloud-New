@@ -375,10 +375,10 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
         audio_file = io.BytesIO(wav_data)
         
         try:
-        with sr.AudioFile(audio_file) as source:
+            with sr.AudioFile(audio_file) as source:
                 # 调整环境噪音（可选，但有助于提高识别准确度）
                 recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            audio = recognizer.record(source)
+                audio = recognizer.record(source)
         except Exception as e:
             # 如果AudioFile无法读取，可能是格式问题
             error_msg = f"无法读取音频文件: {str(e)}"
