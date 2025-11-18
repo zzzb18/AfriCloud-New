@@ -731,81 +731,81 @@ class CloudStorageManager:
                                         except:
                                             pass
                                     raise pdf_error
-                        else:
-                            # 图片文件直接OCR
-                            print(f"[DEBUG] generate_ai_report: 开始OCR识别图片: {file_path}")
-                            
-                            # 检查图片大小和尺寸，如果太大则缩放
-                            try:
-                                from PIL import Image
-                                img = Image.open(file_path)
-                                img_width, img_height = img.size
-                                file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-                                
-                                print(f"[DEBUG] generate_ai_report: 图片尺寸: {img_width}x{img_height}, 文件大小: {file_size_mb:.2f}MB")
-                                
-                                # 如果图片太大，进行缩放
-                                max_dimension = 2000  # 最大尺寸2000像素
-                                max_file_size_mb = 5  # 最大文件大小5MB
-                                
-                                if img_width > max_dimension or img_height > max_dimension or file_size_mb > max_file_size_mb:
-                                    print(f"[DEBUG] generate_ai_report: 图片过大，进行缩放...")
-                                    st.info(f"📷 Image is large ({img_width}x{img_height}, {file_size_mb:.1f}MB), resizing for OCR...")
-                                    
-                                    # 计算缩放比例
-                                    scale = min(max_dimension / img_width, max_dimension / img_height)
-                                    new_width = int(img_width * scale)
-                                    new_height = int(img_height * scale)
-                                    
-                                    # 缩放图片
-                                    img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                                    
-                                    # 保存到临时文件
-                                    import tempfile
-                                    temp_img_path = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                                    temp_img_path.close()
-                                    img_resized.save(temp_img_path.name, 'PNG')
-                                    
-                                    ocr_file_path = temp_img_path.name
-                                    temp_images.append(ocr_file_path)
-                                    print(f"[DEBUG] generate_ai_report: 图片已缩放至: {new_width}x{new_height}")
-                                else:
-                                    ocr_file_path = file_path
-                            except Exception as e:
-                                print(f"[DEBUG] generate_ai_report: 图片检查失败: {str(e)}，使用原始文件")
-                                ocr_file_path = file_path
-                            
-                            try:
-                                with st.spinner("🔍 Recognizing text in image..."):
-                                    results = self.ocr_reader.readtext(ocr_file_path)
-                                print(f"[DEBUG] generate_ai_report: OCR识别完成，结果数量: {len(results) if results else 0}")
-                            except MemoryError as e:
-                                print(f"[DEBUG] generate_ai_report: OCR识别内存不足: {str(e)}")
-                                st.error("❌ OCR recognition failed: Insufficient memory. The image may be too large.")
-                                file_content = f"File Type: Image\n"
-                                file_content += f"Filename: {filename}\n"
-                                file_content += f"Note: OCR recognition failed due to insufficient memory. Please try with a smaller image or disable OCR."
-                                raise  # 重新抛出异常以便外层处理
-                            except Exception as e:
-                                print(f"[DEBUG] generate_ai_report: OCR识别失败: {str(e)}")
-                                raise  # 重新抛出异常以便外层处理
-                            
-                            if results and len(results) > 0:
-                                ocr_text = ' '.join([result[1] for result in results])
-                                print(f"[DEBUG] generate_ai_report: ✅ OCR识别成功，文字长度: {len(ocr_text)}")
-                                print(f"[DEBUG] generate_ai_report: OCR文字预览: {ocr_text[:200]}...")
-                                
-                                file_content = f"File Type: Image\n"
-                                file_content += f"Filename: {filename}\n\n"
-                                file_content += f"OCR Recognized Text:\n{ocr_text}"
-                                
-                                st.success(f"✅ OCR recognition successful, recognized {len(results)} text regions")
                             else:
-                                print(f"[DEBUG] generate_ai_report: ⚠️ OCR未识别到文字")
-                                file_content = f"File Type: Image\n"
-                                file_content += f"Filename: {filename}\n"
-                                file_content += f"Note: No text content recognized in image, may be a pure image or unclear text."
-                                st.warning("⚠️ OCR did not recognize any text content")
+                                # 图片文件直接OCR
+                                print(f"[DEBUG] generate_ai_report: 开始OCR识别图片: {file_path}")
+                                
+                                # 检查图片大小和尺寸，如果太大则缩放
+                                try:
+                                    from PIL import Image
+                                    img = Image.open(file_path)
+                                    img_width, img_height = img.size
+                                    file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                                    
+                                    print(f"[DEBUG] generate_ai_report: 图片尺寸: {img_width}x{img_height}, 文件大小: {file_size_mb:.2f}MB")
+                                    
+                                    # 如果图片太大，进行缩放
+                                    max_dimension = 2000  # 最大尺寸2000像素
+                                    max_file_size_mb = 5  # 最大文件大小5MB
+                                    
+                                    if img_width > max_dimension or img_height > max_dimension or file_size_mb > max_file_size_mb:
+                                        print(f"[DEBUG] generate_ai_report: 图片过大，进行缩放...")
+                                        st.info(f"📷 Image is large ({img_width}x{img_height}, {file_size_mb:.1f}MB), resizing for OCR...")
+                                        
+                                        # 计算缩放比例
+                                        scale = min(max_dimension / img_width, max_dimension / img_height)
+                                        new_width = int(img_width * scale)
+                                        new_height = int(img_height * scale)
+                                        
+                                        # 缩放图片
+                                        img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                                        
+                                        # 保存到临时文件
+                                        import tempfile
+                                        temp_img_path = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                                        temp_img_path.close()
+                                        img_resized.save(temp_img_path.name, 'PNG')
+                                        
+                                        ocr_file_path = temp_img_path.name
+                                        temp_images.append(ocr_file_path)
+                                        print(f"[DEBUG] generate_ai_report: 图片已缩放至: {new_width}x{new_height}")
+                                    else:
+                                        ocr_file_path = file_path
+                                except Exception as e:
+                                    print(f"[DEBUG] generate_ai_report: 图片检查失败: {str(e)}，使用原始文件")
+                                    ocr_file_path = file_path
+                                
+                                try:
+                                    with st.spinner("🔍 Recognizing text in image..."):
+                                        results = self.ocr_reader.readtext(ocr_file_path)
+                                    print(f"[DEBUG] generate_ai_report: OCR识别完成，结果数量: {len(results) if results else 0}")
+                                except MemoryError as e:
+                                    print(f"[DEBUG] generate_ai_report: OCR识别内存不足: {str(e)}")
+                                    st.error("❌ OCR recognition failed: Insufficient memory. The image may be too large.")
+                                    file_content = f"File Type: Image\n"
+                                    file_content += f"Filename: {filename}\n"
+                                    file_content += f"Note: OCR recognition failed due to insufficient memory. Please try with a smaller image or disable OCR."
+                                    raise  # 重新抛出异常以便外层处理
+                                except Exception as e:
+                                    print(f"[DEBUG] generate_ai_report: OCR识别失败: {str(e)}")
+                                    raise  # 重新抛出异常以便外层处理
+                                
+                                if results and len(results) > 0:
+                                    ocr_text = ' '.join([result[1] for result in results])
+                                    print(f"[DEBUG] generate_ai_report: ✅ OCR识别成功，文字长度: {len(ocr_text)}")
+                                    print(f"[DEBUG] generate_ai_report: OCR文字预览: {ocr_text[:200]}...")
+                                    
+                                    file_content = f"File Type: Image\n"
+                                    file_content += f"Filename: {filename}\n\n"
+                                    file_content += f"OCR Recognized Text:\n{ocr_text}"
+                                    
+                                    st.success(f"✅ OCR recognition successful, recognized {len(results)} text regions")
+                                else:
+                                    print(f"[DEBUG] generate_ai_report: ⚠️ OCR未识别到文字")
+                                    file_content = f"File Type: Image\n"
+                                    file_content += f"Filename: {filename}\n"
+                                    file_content += f"Note: No text content recognized in image, may be a pure image or unclear text."
+                                    st.warning("⚠️ OCR did not recognize any text content")
                             
                     except Exception as e:
                         print(f"[DEBUG] generate_ai_report: ❌ OCR识别失败: {str(e)}")
