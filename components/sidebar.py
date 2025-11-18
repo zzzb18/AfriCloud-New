@@ -21,7 +21,7 @@ def render_file_type_sidebar(storage_manager: CloudStorageManager):
     # Initialize selected file type
     if 'selected_file_type_key' not in st.session_state:
         st.session_state.selected_file_type_key = None
-    
+
     
     # File type list container styles
     st.markdown("""

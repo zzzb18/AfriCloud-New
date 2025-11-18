@@ -88,7 +88,6 @@ def render_login_page(auth_manager: AuthManager):
 def render_user_info(auth_manager: AuthManager):
     """Render user information in sidebar"""
     if 'username' in st.session_state:
-        st.markdown("---")
         st.markdown(f"**👤 {st.session_state.username}**")
         
         if st.button(f"🚪 {get_text('logout')}", use_container_width=True):

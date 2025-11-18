@@ -114,8 +114,6 @@ with st.sidebar:
     if selected_lang_code != current_lang:
         set_language(selected_lang_code)
         st.rerun()
-    
-    st.markdown("---")
 
     # User info
     render_user_info(auth_manager)
