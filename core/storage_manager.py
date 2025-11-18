@@ -164,6 +164,9 @@ class CloudStorageManager:
                 cols = [row[1] for row in cursor.fetchall()]
                 if 'method' not in cols:
                     cursor.execute('ALTER TABLE ai_analysis ADD COLUMN method TEXT')
+                # 添加ocr_content字段用于存储完整的OCR内容
+                if 'ocr_content' not in cols:
+                    cursor.execute('ALTER TABLE ai_analysis ADD COLUMN ocr_content TEXT')
             except Exception:
                 pass
 
@@ -610,11 +613,33 @@ class CloudStorageManager:
                 else:
                     return {"success": False, "error": "无法读取Excel/CSV文件，请确保文件格式正确"}
             
-            # ========== 逻辑2: 图片或PDF文件 - 使用本地easyocr提取 ==========
+            # ========== 逻辑2: 图片或PDF文件 - 优先使用数据库中的OCR内容 ==========
             elif file_type == 'image' or (file_type == 'application' and filename.endswith('.pdf')):
-                print(f"[DEBUG] generate_ai_report: 检测到图片或PDF文件，使用本地OCR提取")
+                print(f"[DEBUG] generate_ai_report: 检测到图片或PDF文件，优先使用数据库中的OCR内容")
                 
-                if OCR_AVAILABLE and easyocr is not None:
+                # 先尝试从数据库读取OCR内容
+                conn_ocr = sqlite3.connect(self.db_path)
+                cursor_ocr = conn_ocr.cursor()
+                cursor_ocr.execute('''
+                    SELECT ocr_content FROM ai_analysis 
+                    WHERE file_id = ? AND ocr_content IS NOT NULL AND ocr_content != ''
+                    ORDER BY analysis_time DESC LIMIT 1
+                ''', (file_id,))
+                ocr_result = cursor_ocr.fetchone()
+                conn_ocr.close()
+                
+                if ocr_result and ocr_result[0]:
+                    # 使用数据库中的OCR内容
+                    ocr_text = ocr_result[0]
+                    print(f"[DEBUG] generate_ai_report: ✅ 从数据库读取OCR内容，长度: {len(ocr_text)}")
+                    file_content = f"File Type: {'Image' if file_type == 'image' else 'PDF'}\n"
+                    file_content += f"Filename: {filename}\n\n"
+                    file_content += f"OCR Recognized Text:\n{ocr_text}"
+                    st.info("✅ 使用已保存的OCR内容（无需重新识别）")
+                elif OCR_AVAILABLE and easyocr is not None:
+                    # 数据库中没有OCR内容，执行OCR提取
+                    print(f"[DEBUG] generate_ai_report: 数据库中没有OCR内容，开始执行OCR提取")
+                
                     try:
                         # 确保OCR模型已加载
                         if self.ocr_reader is None:
@@ -2076,6 +2101,82 @@ class CloudStorageManager:
             # 方法4: 简单截取（最后备用）
             return text[:max_length] + "..." if len(text) > max_length else text
 
+    def extract_ocr_content(self, file_id: int) -> Optional[str]:
+        """提取图片或PDF的OCR内容（用于保存到数据库）"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT file_path, file_type, filename FROM files WHERE id = ?', (file_id,))
+            result = cursor.fetchone()
+            conn.close()
+
+            if not result:
+                return None
+
+            file_path, file_type, filename = result
+            
+            # 只处理图片和PDF文件
+            if file_type != 'image' and not (file_type == 'application' and filename.endswith('.pdf')):
+                return None
+
+            ocr_content = None
+
+            # 对于PDF文件，需要转换为图片后OCR
+            if filename.endswith('.pdf') and PDF_AVAILABLE and fitz is not None:
+                if OCR_AVAILABLE and easyocr is not None:
+                    try:
+                        if self.ocr_reader is None:
+                            self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
+                        
+                        doc = fitz.open(file_path)
+                        all_ocr_text = []
+                        
+                        for page_num in range(len(doc)):
+                            page = doc[page_num]
+                            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                            img_data = pix.tobytes("png")
+                            
+                            import tempfile
+                            temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                            temp_img.write(img_data)
+                            temp_img.close()
+                            
+                            try:
+                                page_results = self.ocr_reader.readtext(temp_img.name)
+                                if page_results and len(page_results) > 0:
+                                    page_text = ' '.join([result[1] for result in page_results])
+                                    all_ocr_text.append(f"第{page_num + 1}页:\n{page_text}")
+                            finally:
+                                try:
+                                    os.unlink(temp_img.name)
+                                except:
+                                    pass
+                        
+                        doc.close()
+                        
+                        if all_ocr_text:
+                            ocr_content = '\n\n'.join(all_ocr_text)
+                    except Exception as e:
+                        print(f"[DEBUG] extract_ocr_content: PDF OCR失败: {str(e)}")
+            
+            # 对于图片文件，直接OCR
+            elif file_type == 'image':
+                if OCR_AVAILABLE and easyocr is not None:
+                    try:
+                        if self.ocr_reader is None:
+                            self.ocr_reader = easyocr.Reader(['ch_sim', 'en'])
+                        
+                        results = self.ocr_reader.readtext(file_path)
+                        if results and len(results) > 0:
+                            ocr_content = ' '.join([result[1] for result in results])
+                    except Exception as e:
+                        print(f"[DEBUG] extract_ocr_content: 图片OCR失败: {str(e)}")
+            
+            return ocr_content
+        except Exception as e:
+            print(f"[DEBUG] extract_ocr_content: 错误: {str(e)}")
+            return None
+
     def analyze_file_with_ai(self, file_id: int) -> Dict[str, Any]:
         """使用DeepSeek AI分析文件"""
         try:
@@ -2084,6 +2185,20 @@ class CloudStorageManager:
 
             if not extracted_text:
                 return {"success": False, "error": "无法提取文件文本内容"}
+            
+            # 对于图片和PDF文件，提取并保存OCR内容
+            ocr_content = None
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT file_type, filename FROM files WHERE id = ?', (file_id,))
+            file_info = cursor.fetchone()
+            conn.close()
+            
+            if file_info:
+                file_type, filename = file_info
+                if file_type == 'image' or (file_type == 'application' and filename.endswith('.pdf')):
+                    ocr_content = self.extract_ocr_content(file_id)
+                    print(f"[DEBUG] analyze_file_with_ai: OCR内容提取完成，长度: {len(ocr_content) if ocr_content else 0}")
 
             # 如果配置了DeepSeek API，使用AI分析
             if self.deepseek_api_key:
@@ -2130,11 +2245,11 @@ class CloudStorageManager:
                     cursor = conn.cursor()
 
                     cursor.execute('''
-                        INSERT INTO ai_analysis (file_id, analysis_type, industry_category, extracted_text, key_phrases, summary, confidence_score, method)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO ai_analysis (file_id, analysis_type, industry_category, extracted_text, key_phrases, summary, confidence_score, method, ocr_content)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (file_id, "full_analysis", classification["category"],
                           extracted_text[:1000], json.dumps(key_phrases, ensure_ascii=False),
-                          summary, classification["confidence"], "DeepSeek AI"))
+                          summary, classification["confidence"], "DeepSeek AI", ocr_content))
 
                     conn.commit()
                     conn.close()
@@ -2164,11 +2279,11 @@ class CloudStorageManager:
             cursor = conn.cursor()
 
             cursor.execute('''
-                INSERT INTO ai_analysis (file_id, analysis_type, industry_category, extracted_text, key_phrases, summary, confidence_score, method)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO ai_analysis (file_id, analysis_type, industry_category, extracted_text, key_phrases, summary, confidence_score, method, ocr_content)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (file_id, "full_analysis", classification["category"],
                   extracted_text[:1000], json.dumps(key_phrases, ensure_ascii=False),
-                  summary, classification["confidence"], "Local Analysis"))
+                  summary, classification["confidence"], "Local Analysis", ocr_content))
 
             conn.commit()
             conn.close()
