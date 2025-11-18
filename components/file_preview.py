@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import hashlib
 from core.storage_manager import CloudStorageManager
 from utils.dependencies import PDF_AVAILABLE, WHISPER_AVAILABLE, SPEECH_RECOGNITION_AVAILABLE
 from utils.speech_to_text import transcribe_audio, get_available_methods, check_ffmpeg
@@ -211,18 +212,27 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
                 elif not WHISPER_AVAILABLE and not SPEECH_RECOGNITION_AVAILABLE:
                     st.info("💡 请安装语音识别库：`pip install openai-whisper SpeechRecognition`")
             else:
-                # 转文字按钮（自动选择最佳方法）
-                if st.button("🔄 转换为文字", key=f"transcribe_{file_id}", type="primary", use_container_width=True):
-                    with st.spinner("正在识别语音..."):
+                # 获取音频字节数据用于检测是否有新音频
+                if hasattr(audio_data, 'read'):
+                    audio_data.seek(0)
+                    audio_bytes = audio_data.read()
+                    audio_data.seek(0)  # 重置位置以便后续使用
+                else:
+                    audio_bytes = audio_data
+                
+                # 检查是否有新音频（通过比较音频数据的哈希值）
+                audio_hash_key = f"audio_hash_{file_id}"
+                current_audio_hash = hashlib.md5(audio_bytes).hexdigest()
+                previous_audio_hash = st.session_state.get(audio_hash_key, None)
+                
+                # 如果有新音频且还没有识别过，自动触发识别
+                if current_audio_hash != previous_audio_hash:
+                    # 保存当前音频的哈希值
+                    st.session_state[audio_hash_key] = current_audio_hash
+                    
+                    # 自动触发识别
+                    with st.spinner("🎤 正在自动识别语音..."):
                         try:
-                            # 获取音频字节数据（Streamlit的audio_input返回BytesIO）
-                            if hasattr(audio_data, 'read'):
-                                # 重置到开头
-                                audio_data.seek(0)
-                                audio_bytes = audio_data.read()
-                            else:
-                                audio_bytes = audio_data
-                            
                             # 检查音频数据是否为空
                             if not audio_bytes or len(audio_bytes) == 0:
                                 st.error("❌ 音频数据为空，请重新录制")
@@ -241,12 +251,20 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
                                     
                                     st.success(f"✅ 识别成功: {transcribed_text[:50]}...")
                                     st.session_state[f"show_audio_recorder_{file_id}"] = False
+                                    # 清除音频哈希，以便下次录音时可以重新识别
+                                    if audio_hash_key in st.session_state:
+                                        del st.session_state[audio_hash_key]
                                     st.rerun()
                                 else:
                                     # 错误信息已经在transcribe_audio函数中显示，这里只显示通用提示
                                     st.warning("⚠️ 语音识别失败，请重试。如果问题持续，请检查：\n1. 网络连接（如果使用在线识别）\n2. 音频质量\n3. 是否安装了必要的依赖库")
                         except Exception as e:
                             st.error(f"❌ 处理音频时发生错误: {str(e)}")
+                else:
+                    # 如果已经识别过当前音频，显示已识别的文本（如果有）
+                    text_area_key = f"ai_question_{file_id}"
+                    if text_area_key in st.session_state and st.session_state[text_area_key]:
+                        st.info(f"📝 已识别: {st.session_state[text_area_key][:100]}...")
         
         # 关闭录音区域按钮
         if st.button("❌ 关闭", key=f"close_recorder_{file_id}"):
