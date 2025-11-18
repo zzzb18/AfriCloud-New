@@ -57,6 +57,29 @@ if 'storage_manager' not in st.session_state:
 
 storage_manager = st.session_state.storage_manager
 
+# Load Whisper model on login (only once, in background)
+if 'whisper_model_loaded' not in st.session_state:
+    # Check if Whisper is available
+    from utils.dependencies import WHISPER_AVAILABLE
+    from utils.speech_to_text import check_ffmpeg
+    
+    if WHISPER_AVAILABLE and check_ffmpeg():
+        try:
+            import whisper
+            # Show loading message only on first load
+            loading_placeholder = st.empty()
+            with loading_placeholder.container():
+                st.info("🔄 正在后台加载Whisper模型（首次加载可能需要一些时间，请稍候...）")
+            
+            st.session_state.whisper_model = whisper.load_model("medium")
+            st.session_state.whisper_model_loaded = True
+            loading_placeholder.empty()  # Clear loading message
+        except Exception as e:
+            st.warning(f"⚠️ Whisper模型加载失败: {str(e)}，将在使用时重试")
+            st.session_state.whisper_model_loaded = False
+    else:
+        st.session_state.whisper_model_loaded = False
+
 # Initialize session state
 if 'current_tab' not in st.session_state:
     st.session_state.current_tab = "Home"
