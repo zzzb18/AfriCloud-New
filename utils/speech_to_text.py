@@ -34,13 +34,19 @@ def check_ffmpeg() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
-def convert_audio_to_wav(audio_data: bytes, input_format: str = "webm") -> Optional[bytes]:
+def check_ffprobe() -> bool:
+    """检查ffprobe是否可用（pydub需要ffprobe）"""
+    return shutil.which("ffprobe") is not None
+
+
+def convert_audio_to_wav(audio_data: bytes, input_format: str = "webm", silent: bool = False) -> Optional[bytes]:
     """
     将音频数据转换为WAV格式
     
     Args:
         audio_data: 原始音频字节数据
         input_format: 输入音频格式（默认webm，Streamlit audio_input的默认格式）
+        silent: 是否静默处理错误（不显示警告信息）
     
     Returns:
         转换后的WAV格式字节数据，失败返回None
@@ -52,17 +58,20 @@ def convert_audio_to_wav(audio_data: bytes, input_format: str = "webm") -> Optio
     else:
         audio_bytes = audio_data
     
-    # 方法1: 使用pydub转换（如果可用）
-    if PYDUB_AVAILABLE:
+    # 方法1: 使用pydub转换（如果可用且ffprobe可用）
+    if PYDUB_AVAILABLE and check_ffprobe():
         try:
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format=input_format)
             wav_buffer = io.BytesIO()
             audio_segment.export(wav_buffer, format="wav")
             return wav_buffer.getvalue()
         except Exception as e:
-            st.warning(f"使用pydub转换失败: {str(e)}，尝试使用ffmpeg")
+            # 静默失败，继续尝试其他方法
+            if not silent:
+                # 只在调试时显示，正常流程不显示警告
+                pass
     
-    # 方法2: 使用ffmpeg转换（如果可用）
+    # 方法2: 使用ffmpeg转换（如果可用，这是最可靠的方法）
     if check_ffmpeg():
         try:
             # 创建临时输入文件
@@ -75,8 +84,8 @@ def convert_audio_to_wav(audio_data: bytes, input_format: str = "webm") -> Optio
                 output_path = output_file.name
             
             try:
-                # 使用ffmpeg转换
-                subprocess.run(
+                # 使用ffmpeg转换（静默模式，不显示输出）
+                result = subprocess.run(
                     [
                         "ffmpeg", "-y", "-i", input_path,
                         "-ar", "16000",  # 采样率16kHz
@@ -86,26 +95,56 @@ def convert_audio_to_wav(audio_data: bytes, input_format: str = "webm") -> Optio
                     ],
                     check=True,
                     capture_output=True,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL
                 )
                 
                 # 读取转换后的文件
-                with open(output_path, "rb") as f:
-                    wav_data = f.read()
-                
-                return wav_data
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    with open(output_path, "rb") as f:
+                        wav_data = f.read()
+                    return wav_data
+            except subprocess.CalledProcessError as e:
+                # ffmpeg转换失败
+                if not silent:
+                    pass  # 静默处理
+            except Exception as e:
+                if not silent:
+                    pass  # 静默处理
             finally:
                 # 清理临时文件
                 for path in [input_path, output_path]:
                     if os.path.exists(path):
-                        os.unlink(path)
+                        try:
+                            os.unlink(path)
+                        except:
+                            pass
         except Exception as e:
-            st.warning(f"使用ffmpeg转换失败: {str(e)}")
+            if not silent:
+                pass  # 静默处理
     
     # 方法3: 如果输入已经是WAV格式，直接返回
     # 检查是否是WAV格式（WAV文件头以"RIFF"开头）
-    if audio_bytes[:4] == b'RIFF':
+    if len(audio_bytes) >= 4 and audio_bytes[:4] == b'RIFF':
         return audio_bytes
+    
+    # 方法4: 尝试使用pydub但不依赖ffprobe（某些格式可能可以）
+    if PYDUB_AVAILABLE:
+        try:
+            # 尝试直接处理，不指定格式（让pydub自动检测）
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
+            wav_buffer = io.BytesIO()
+            audio_segment.export(wav_buffer, format="wav")
+            return wav_buffer.getvalue()
+        except Exception:
+            pass  # 静默失败
+    
+    # 方法5: 对于Streamlit Cloud环境，如果所有转换都失败，尝试直接使用原始数据
+    # 某些情况下，speech_recognition可能能够处理原始格式
+    # 或者Streamlit可能已经返回了WAV格式（虽然文档说是WebM）
+    if not silent:
+        # 只在调试模式下显示提示
+        pass
     
     # 如果所有方法都失败，返回None
     return None
@@ -158,6 +197,7 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
         error_msg = (
             "❌ Whisper需要ffmpeg才能工作。\n\n"
             "请安装ffmpeg：\n"
+            "• Streamlit Cloud: 在项目根目录创建 `packages.txt` 文件，添加 `ffmpeg`\n"
             "• Windows: 下载 https://ffmpeg.org/download.html 或使用 `choco install ffmpeg`\n"
             "• macOS: `brew install ffmpeg`\n"
             "• Linux: `sudo apt install ffmpeg` 或 `sudo yum install ffmpeg`\n\n"
@@ -179,8 +219,8 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
         else:
             audio_bytes = audio_data
         
-        # 尝试转换音频格式（如果需要）
-        wav_data = convert_audio_to_wav(audio_bytes, input_format="webm")
+        # 尝试转换音频格式（如果需要，静默模式）
+        wav_data = convert_audio_to_wav(audio_bytes, input_format="webm", silent=True)
         if wav_data is None:
             # 如果转换失败，尝试直接使用原始数据
             wav_data = audio_bytes
@@ -204,6 +244,7 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
             error_msg = (
                 "❌ 找不到ffmpeg。\n\n"
                 "请安装ffmpeg：\n"
+                "• Streamlit Cloud: 在项目根目录创建 `packages.txt` 文件，添加 `ffmpeg`\n"
                 "• Windows: 下载 https://ffmpeg.org/download.html 或使用 `choco install ffmpeg`\n"
                 "• macOS: `brew install ffmpeg`\n"
                 "• Linux: `sudo apt install ffmpeg` 或 `sudo yum install ffmpeg`\n\n"
@@ -233,8 +274,8 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
         else:
             audio_bytes = audio_data
         
-        # 尝试转换音频格式为WAV（speech_recognition需要WAV格式）
-        wav_data = convert_audio_to_wav(audio_bytes, input_format="webm")
+        # 尝试转换音频格式为WAV（speech_recognition需要WAV格式，静默模式）
+        wav_data = convert_audio_to_wav(audio_bytes, input_format="webm", silent=True)
         if wav_data is None:
             # 如果转换失败，尝试直接使用原始数据（可能是WAV格式）
             wav_data = audio_bytes
@@ -251,7 +292,15 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
             # 如果AudioFile无法读取，可能是格式问题
             error_msg = f"无法读取音频文件: {str(e)}"
             if "could not find codec" in str(e).lower() or "format" in str(e).lower():
-                error_msg += "\n\n提示：音频格式可能不支持，请尝试安装pydub: pip install pydub"
+                error_msg += "\n\n提示：音频格式转换失败。"
+                if not check_ffmpeg():
+                    error_msg += "\n请安装ffmpeg以支持音频格式转换："
+                    error_msg += "\n• Streamlit Cloud: 在项目根目录创建 `packages.txt` 文件，添加 `ffmpeg`"
+                    error_msg += "\n• Windows: 下载 https://ffmpeg.org/download.html 或使用 `choco install ffmpeg`"
+                    error_msg += "\n• macOS: `brew install ffmpeg`"
+                    error_msg += "\n• Linux: `sudo apt install ffmpeg`"
+                elif not check_ffprobe():
+                    error_msg += "\nffmpeg已安装，但ffprobe不可用。请确保ffmpeg完整安装（包含ffprobe）。"
             st.error(error_msg)
             return None
         
@@ -281,7 +330,13 @@ def _transcribe_with_speech_recognition(audio_data: bytes) -> Optional[str]:
         error_msg = f"语音识别失败: {str(e)}"
         # 提供更详细的错误信息
         if "AudioFile" in str(e) or "format" in str(e).lower():
-            error_msg += "\n\n提示：音频格式可能不支持，请尝试安装pydub: pip install pydub"
+            error_msg += "\n\n提示：音频格式可能不支持。"
+            if not check_ffmpeg():
+                error_msg += "\n请安装ffmpeg以支持音频格式转换："
+                error_msg += "\n• Streamlit Cloud: 在项目根目录创建 `packages.txt` 文件，添加 `ffmpeg`"
+                error_msg += "\n• Windows: 下载 https://ffmpeg.org/download.html 或使用 `choco install ffmpeg`"
+                error_msg += "\n• macOS: `brew install ffmpeg`"
+                error_msg += "\n• Linux: `sudo apt install ffmpeg`"
         st.error(error_msg)
         return None
 
