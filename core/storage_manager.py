@@ -1832,10 +1832,10 @@ Please answer the user's question based on the above file content."""
                 print(f"[DEBUG] OCR状态 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}, ocr_reader: {self.ocr_reader is not None}")
                 
                 if OCR_AVAILABLE and easyocr is not None:
-                        # 延迟加载OCR模型
+                    # 延迟加载OCR模型
                     if not self._load_ocr_model():
                         print("[DEBUG] OCR模型加载失败，跳过OCR提取")
-                            extracted_text = ""
+                        extracted_text = ""
                     else:
                         # OCR模型已加载，进行识别
                         print(f"[DEBUG] OCR模型已加载，开始识别图片: {file_path}")
