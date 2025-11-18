@@ -22,24 +22,6 @@ def render_file_type_sidebar(storage_manager: CloudStorageManager):
     if 'selected_file_type_key' not in st.session_state:
         st.session_state.selected_file_type_key = None
     
-    # Top title bar - "My Files"
-    st.markdown("""
-    <div style="
-        background: #e3f2fd;
-        padding: 12px 16px;
-        margin: -16px -16px 8px -16px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid #bbdefb;
-    ">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="color: #1976d2; font-size: 14px; font-weight: 500;">▼</span>
-            <span style="color: #1976d2; font-size: 14px; font-weight: 500;">{}</span>
-        </div>
-        <span style="color: #1976d2; font-size: 16px; cursor: pointer;">⋯</span>
-    </div>
-    """.format(get_text("my_files")), unsafe_allow_html=True)
     
     # File type list container styles
     st.markdown("""
