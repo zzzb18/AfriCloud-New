@@ -634,104 +634,103 @@ class CloudStorageManager:
                             file_content += f"Filename: {filename}\n"
                             file_content += f"Note: OCR model loading failed, unable to extract text from file."
                             st.warning("⚠️ OCR model loading failed, skipping OCR extraction")
-                            continue
-                        
-                        # 对于PDF文件，需要先转换为图片
-                        ocr_file_path = file_path
-                        is_pdf = filename.endswith('.pdf')
-                        temp_images = []
-                        
-                        if is_pdf and PDF_AVAILABLE and fitz is not None:
-                            print(f"[DEBUG] generate_ai_report: PDF文件，先转换为图片...")
-                            try:
-                                doc = fitz.open(file_path)
-                                all_ocr_text = []
-                                
-                                # 限制PDF页数，避免内存溢出
-                                max_pages = min(len(doc), 10)  # 最多处理10页
-                                if len(doc) > max_pages:
-                                    print(f"[DEBUG] generate_ai_report: PDF有{len(doc)}页，只处理前{max_pages}页以节省内存")
-                                    st.info(f"📄 PDF has {len(doc)} pages, processing first {max_pages} pages to save memory")
-                                
-                                with st.spinner("🔍 Converting PDF to images and recognizing text..."):
-                                    for page_num in range(max_pages):
-                                        try:
-                                            page = doc[page_num]
-                                            # 降低缩放比例以节省内存（从2倍降到1.5倍）
-                                            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
-                                            img_data = pix.tobytes("png")
-                                            
-                                            # 检查图片大小，如果太大则跳过
-                                            img_size_mb = len(img_data) / (1024 * 1024)
-                                            if img_size_mb > 10:  # 如果单页图片超过10MB，跳过
-                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页图片过大({img_size_mb:.2f}MB)，跳过")
-                                                continue
-                                            
-                                            # 保存临时图片
-                                            import tempfile
-                                            import os
-                                            temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                                            temp_img.write(img_data)
-                                            temp_img.close()
-                                            temp_images.append(temp_img.name)
-                                            
-                                            # 对每页进行OCR
-                                            print(f"[DEBUG] generate_ai_report: 处理PDF第 {page_num + 1} 页...")
-                                            try:
-                                                page_results = self.ocr_reader.readtext(temp_img.name)
-                                                
-                                                if page_results and len(page_results) > 0:
-                                                    page_text = ' '.join([result[1] for result in page_results])
-                                                    all_ocr_text.append(f"Page {page_num + 1}:\n{page_text}")
-                                            except MemoryError as e:
-                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页OCR内存不足: {str(e)}")
-                                                st.warning(f"⚠️ Page {page_num + 1} OCR failed due to insufficient memory")
-                                                break  # 内存不足时停止处理
-                                            except Exception as e:
-                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页OCR失败: {str(e)}")
-                                                # 继续处理下一页
-                                                continue
-                                        except MemoryError as e:
-                                            print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页处理内存不足: {str(e)}")
-                                            st.warning(f"⚠️ Page {page_num + 1} processing failed due to insufficient memory")
-                                            break
-                                        except Exception as e:
-                                            print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页处理失败: {str(e)}")
-                                            continue
-                                
-                                doc.close()
-                                
-                                # 清理临时图片
-                                for temp_img_path in temp_images:
-                                    try:
-                                        os.unlink(temp_img_path)
-                                    except:
-                                        pass
-                                
-                                if all_ocr_text:
-                                    ocr_text = '\n\n'.join(all_ocr_text)
-                                    print(f"[DEBUG] generate_ai_report: ✅ PDF OCR识别成功，共 {len(all_ocr_text)} 页，文字长度: {len(ocr_text)}")
-                                    file_content = f"File Type: PDF\n"
-                                    file_content += f"Filename: {filename}\n\n"
-                                    file_content += f"OCR Recognized Text:\n{ocr_text}"
-                                    st.success(f"✅ PDF OCR recognition successful, recognized {len(all_ocr_text)} pages")
-                                else:
-                                    print(f"[DEBUG] generate_ai_report: ⚠️ PDF OCR未识别到文字")
-                                    file_content = f"File Type: PDF\n"
-                                    file_content += f"Filename: {filename}\n"
-                                    file_content += f"Note: No text content recognized in PDF, may be a scanned PDF or unclear text."
-                                    st.warning("⚠️ PDF OCR did not recognize any text content")
+                        else:
+                            # 对于PDF文件，需要先转换为图片
+                            ocr_file_path = file_path
+                            is_pdf = filename.endswith('.pdf')
+                            temp_images = []
+                            
+                            if is_pdf and PDF_AVAILABLE and fitz is not None:
+                                print(f"[DEBUG] generate_ai_report: PDF文件，先转换为图片...")
+                                try:
+                                    doc = fitz.open(file_path)
+                                    all_ocr_text = []
                                     
-                            except Exception as pdf_error:
-                                print(f"[DEBUG] generate_ai_report: PDF处理失败: {str(pdf_error)}")
-                                # 清理临时图片
-                                for temp_img_path in temp_images:
-                                    try:
-                                        import os
-                                        os.unlink(temp_img_path)
-                                    except:
-                                        pass
-                                raise pdf_error
+                                    # 限制PDF页数，避免内存溢出
+                                    max_pages = min(len(doc), 10)  # 最多处理10页
+                                    if len(doc) > max_pages:
+                                        print(f"[DEBUG] generate_ai_report: PDF有{len(doc)}页，只处理前{max_pages}页以节省内存")
+                                        st.info(f"📄 PDF has {len(doc)} pages, processing first {max_pages} pages to save memory")
+                                    
+                                    with st.spinner("🔍 Converting PDF to images and recognizing text..."):
+                                        for page_num in range(max_pages):
+                                            try:
+                                                page = doc[page_num]
+                                                # 降低缩放比例以节省内存（从2倍降到1.5倍）
+                                                pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+                                                img_data = pix.tobytes("png")
+                                                
+                                                # 检查图片大小，如果太大则跳过
+                                                img_size_mb = len(img_data) / (1024 * 1024)
+                                                if img_size_mb > 10:  # 如果单页图片超过10MB，跳过
+                                                    print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页图片过大({img_size_mb:.2f}MB)，跳过")
+                                                    continue
+                                                
+                                                # 保存临时图片
+                                                import tempfile
+                                                import os
+                                                temp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                                                temp_img.write(img_data)
+                                                temp_img.close()
+                                                temp_images.append(temp_img.name)
+                                                
+                                                # 对每页进行OCR
+                                                print(f"[DEBUG] generate_ai_report: 处理PDF第 {page_num + 1} 页...")
+                                                try:
+                                                    page_results = self.ocr_reader.readtext(temp_img.name)
+                                                    
+                                                    if page_results and len(page_results) > 0:
+                                                        page_text = ' '.join([result[1] for result in page_results])
+                                                        all_ocr_text.append(f"Page {page_num + 1}:\n{page_text}")
+                                                except MemoryError as e:
+                                                    print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页OCR内存不足: {str(e)}")
+                                                    st.warning(f"⚠️ Page {page_num + 1} OCR failed due to insufficient memory")
+                                                    break  # 内存不足时停止处理
+                                                except Exception as e:
+                                                    print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页OCR失败: {str(e)}")
+                                                    # 继续处理下一页
+                                                    continue
+                                            except MemoryError as e:
+                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页处理内存不足: {str(e)}")
+                                                st.warning(f"⚠️ Page {page_num + 1} processing failed due to insufficient memory")
+                                                break
+                                            except Exception as e:
+                                                print(f"[DEBUG] generate_ai_report: PDF第{page_num + 1}页处理失败: {str(e)}")
+                                                continue
+                                    
+                                    doc.close()
+                                    
+                                    # 清理临时图片
+                                    for temp_img_path in temp_images:
+                                        try:
+                                            os.unlink(temp_img_path)
+                                        except:
+                                            pass
+                                    
+                                    if all_ocr_text:
+                                        ocr_text = '\n\n'.join(all_ocr_text)
+                                        print(f"[DEBUG] generate_ai_report: ✅ PDF OCR识别成功，共 {len(all_ocr_text)} 页，文字长度: {len(ocr_text)}")
+                                        file_content = f"File Type: PDF\n"
+                                        file_content += f"Filename: {filename}\n\n"
+                                        file_content += f"OCR Recognized Text:\n{ocr_text}"
+                                        st.success(f"✅ PDF OCR recognition successful, recognized {len(all_ocr_text)} pages")
+                                    else:
+                                        print(f"[DEBUG] generate_ai_report: ⚠️ PDF OCR未识别到文字")
+                                        file_content = f"File Type: PDF\n"
+                                        file_content += f"Filename: {filename}\n"
+                                        file_content += f"Note: No text content recognized in PDF, may be a scanned PDF or unclear text."
+                                        st.warning("⚠️ PDF OCR did not recognize any text content")
+                                        
+                                except Exception as pdf_error:
+                                    print(f"[DEBUG] generate_ai_report: PDF处理失败: {str(pdf_error)}")
+                                    # 清理临时图片
+                                    for temp_img_path in temp_images:
+                                        try:
+                                            import os
+                                            os.unlink(temp_img_path)
+                                        except:
+                                            pass
+                                    raise pdf_error
                         else:
                             # 图片文件直接OCR
                             print(f"[DEBUG] generate_ai_report: 开始OCR识别图片: {file_path}")
