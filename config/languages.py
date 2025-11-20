@@ -5,7 +5,7 @@ import streamlit as st
 TRANSLATIONS = {
     "en": {
         # 通用
-        "app_title": "🌾 AI Cloud Storage",
+        "app_title": "AI Cloud Storage",
         "app_subtitle": "Intelligent File Management Platform",
         "welcome": "Welcome",
         "logout": "Logout",
