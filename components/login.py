@@ -6,12 +6,25 @@ from config.languages import get_text
 
 def render_login_page(auth_manager: AuthManager):
     """Render login page"""
-    st.markdown("""
-    <div style="text-align: center; padding: 40px 0;">
-        <h1 style="color: #1e293b; margin-bottom: 10px;">{}</h1>
-        <p style="color: #64748b; font-size: 16px;">{}</p>
-    </div>
-    """.format(get_text("app_title"), get_text("app_subtitle")), unsafe_allow_html=True)
+    # Logo and title section
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        try:
+            from pathlib import Path
+            if Path("logo.jpg").exists():
+                st.image("logo.jpg", width=120, use_container_width=False)
+            else:
+                st.markdown("<div style='font-size: 80px; text-align: center; padding: 20px 0;'>🌾</div>", unsafe_allow_html=True)
+        except:
+            # If logo file not found, show emoji as fallback
+            st.markdown("<div style='font-size: 80px; text-align: center; padding: 20px 0;'>🌾</div>", unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="text-align: center; padding: 20px 0;">
+            <h1 style="color: #1e293b; margin-bottom: 10px;">{}</h1>
+            <p style="color: #64748b; font-size: 16px;">{}</p>
+        </div>
+        """.format(get_text("app_title"), get_text("app_subtitle")), unsafe_allow_html=True)
     
     # Login/Register tabs
     tab1, tab2 = st.tabs([f"🔐 {get_text('login')}", f"📝 {get_text('register')}"])

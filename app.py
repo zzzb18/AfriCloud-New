@@ -89,12 +89,29 @@ if 'viewing_file_id' not in st.session_state:
 
 # ==================== Left Sidebar Tabs ====================
 with st.sidebar:
+    # Logo and title section
+    col_logo, col_text = st.columns([1, 2.5])
+    with col_logo:
+        try:
+            from pathlib import Path
+            if Path("logo.jpg").exists():
+                st.image("logo.jpg", width=50, use_container_width=False)
+            else:
+                st.markdown("<div style='font-size: 40px; text-align: center; padding-top: 4px;'>🌾</div>", unsafe_allow_html=True)
+        except:
+            st.markdown("<div style='font-size: 40px; text-align: center; padding-top: 4px;'>🌾</div>", unsafe_allow_html=True)
+    
+    with col_text:
+        st.markdown(f"""
+        <div style="padding-top: 6px;">
+            <h2 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 600; line-height: 1.2;">{get_text("app_title")}</h2>
+            <p style="margin: 2px 0 0 0; color: #64748b; font-size: 11px; line-height: 1.2;">{get_text("app_subtitle")}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("""
-    <div style="padding: 12px 0 8px 0; border-bottom: 1px solid #e8e8e8; margin-bottom: 8px;">
-        <h2 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 600;">{}</h2>
-        <p style="margin: 2px 0 0 0; color: #64748b; font-size: 12px;">{}</p>
-    </div>
-    """.format(get_text("app_title"), get_text("app_subtitle")), unsafe_allow_html=True)
+    <div style="border-bottom: 1px solid #e8e8e8; margin: 8px 0;"></div>
+    """, unsafe_allow_html=True)
 
     # Language switcher
     current_lang = get_current_language()
