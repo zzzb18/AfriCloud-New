@@ -9,15 +9,7 @@ def render_login_page(auth_manager: AuthManager):
     # Logo and title section
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        try:
-            from pathlib import Path
-            if Path("logo.jpg").exists():
-                st.image("logo.jpg", width=120, use_container_width=False)
-            else:
-                st.markdown("<div style='font-size: 80px; text-align: center; padding: 20px 0;'>🌾</div>", unsafe_allow_html=True)
-        except:
-            # If logo file not found, show emoji as fallback
-            st.markdown("<div style='font-size: 80px; text-align: center; padding: 20px 0;'>🌾</div>", unsafe_allow_html=True)
+        st.image("logo.jpg", width=120, use_container_width=False)
         
         st.markdown("""
         <div style="text-align: center; padding: 20px 0;">

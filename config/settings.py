@@ -4,7 +4,7 @@ import streamlit as st
 # 页面配置
 PAGE_CONFIG = {
     "page_title": "Agribusiness Expert AI Cloud",
-    "page_icon": "🌾",
+    "page_icon": "logo.jpg",  # 使用logo图片作为页面图标
     "layout": "wide",
     "initial_sidebar_state": "expanded"
 }

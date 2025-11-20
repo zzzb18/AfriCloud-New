@@ -92,14 +92,7 @@ with st.sidebar:
     # Logo and title section
     col_logo, col_text = st.columns([1, 2.5])
     with col_logo:
-        try:
-            from pathlib import Path
-            if Path("logo.jpg").exists():
-                st.image("logo.jpg", width=50, use_container_width=False)
-            else:
-                st.markdown("<div style='font-size: 40px; text-align: center; padding-top: 4px;'>🌾</div>", unsafe_allow_html=True)
-        except:
-            st.markdown("<div style='font-size: 40px; text-align: center; padding-top: 4px;'>🌾</div>", unsafe_allow_html=True)
+        st.image("logo.jpg", width=50, use_container_width=False)
     
     with col_text:
         st.markdown(f"""
