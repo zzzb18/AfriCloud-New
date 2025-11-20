@@ -90,9 +90,11 @@ if 'viewing_file_id' not in st.session_state:
 # ==================== Left Sidebar Tabs ====================
 with st.sidebar:
     # Logo and title section
-    col_logo, col_text = st.columns([1, 2.5])
+    col_logo, col_text = st.columns([1, 2], gap="small")
     with col_logo:
+        st.markdown("<div style='padding-top: 8px;'>", unsafe_allow_html=True)
         st.image("logo.jpg", width=50, use_container_width=False)
+        st.markdown("</div>", unsafe_allow_html=True)
     
     with col_text:
         st.markdown(f"""
