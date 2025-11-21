@@ -6,17 +6,20 @@ from config.languages import get_text
 
 def render_login_page(auth_manager: AuthManager):
     """Render login page"""
-    # Logo and title section
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+    # Logo and title section - same row, aligned
+    col_logo, col_text = st.columns([1, 3], gap="medium")
+    with col_logo:
         st.image("logo.jpg", width=120, use_container_width=False)
-        
-        st.markdown("""
-        <div style="text-align: center; padding: 20px 0;">
-            <h1 style="color: #1e293b; margin-bottom: 10px;">{}</h1>
-            <p style="color: #64748b; font-size: 16px;">{}</p>
+    
+    with col_text:
+        st.markdown(f"""
+        <div style="display: flex; flex-direction: column; justify-content: center; height: 100%; padding-left: 20px;">
+            <h1 style="color: #1e293b; margin: 0 0 8px 0; font-size: 32px; font-weight: 600;">{get_text("app_title")}</h1>
+            <p style="color: #64748b; font-size: 16px; margin: 0;">{get_text("app_subtitle")}</p>
         </div>
-        """.format(get_text("app_title"), get_text("app_subtitle")), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # Login/Register tabs
     tab1, tab2 = st.tabs([f"🔐 {get_text('login')}", f"📝 {get_text('register')}"])

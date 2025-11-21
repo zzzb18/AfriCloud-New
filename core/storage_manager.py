@@ -418,6 +418,7 @@ class CloudStorageManager:
         conn.close()
 
     def _to_english_category(self, category: str) -> str:
+        """将分类名称转换为英文（统一存储格式）"""
         mapping = {
             "种植业": "Planting",
             "畜牧业": "Livestock",
@@ -426,8 +427,18 @@ class CloudStorageManager:
             "供应链与仓储": "SupplyChain-Storage",
             "气候与遥感": "Climate-RemoteSensing",
             "农业物联网": "Agri-IoT",
+            "未分类": "Unclassified",  # 添加未分类的映射
         }
-        return mapping.get(category, category)
+        # 如果不在映射表中，检查是否已经是英文分类名称
+        if category in mapping:
+            return mapping[category]
+        # 如果已经是英文分类名称，直接返回
+        english_categories = ["Planting", "Livestock", "Inputs-Soil", "Agri-Finance", 
+                            "SupplyChain-Storage", "Climate-RemoteSensing", "Agri-IoT", "Unclassified"]
+        if category in english_categories:
+            return category
+        # 否则返回Unclassified作为默认值
+        return "Unclassified"
 
     def generate_smart_report(self, file_id: int) -> Dict[str, Any]:
         """生成智能报告和图表"""

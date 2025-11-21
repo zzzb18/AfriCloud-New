@@ -291,20 +291,26 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
     with col_auto:
         if st.button(f"📁 {get_text('auto_classify')}", key=f"auto_classify_{file_id}", use_container_width=True):
             if ai_analysis:
-                category = ai_analysis.get('industry_category', get_text('unclassified'))
-                if category != get_text('unclassified'):
-                    result = storage_manager.move_file_to_industry_folder(file_id, category)
-                    if result.get("success"):
-                        folder_id = result.get("folder_id")
-                        st.success(f"✅ {get_text('file_moved_to').format(category)}")
-                        # Automatically switch to the corresponding folder
-                        if folder_id:
-                            st.session_state.current_folder_id = folder_id
-                            st.info(f"💡 {get_text('automatically_switched_to_folder').format(category)}")
-                        st.rerun()
+                category = ai_analysis.get('industry_category', 'Unclassified')
+                # 统一转换为英文分类名称进行比较（数据库存储的是英文）
+                if category and category != 'Unclassified' and category != '未分类':
+                    # 确保分类名称是英文格式
+                    eng_category = storage_manager._to_english_category(category)
+                    if eng_category and eng_category != 'Unclassified':
+                        result = storage_manager.move_file_to_industry_folder(file_id, eng_category)
+                        if result.get("success"):
+                            folder_id = result.get("folder_id")
+                            st.success(f"✅ {get_text('file_moved_to').format(eng_category)}")
+                            # Automatically switch to the corresponding folder
+                            if folder_id:
+                                st.session_state.current_folder_id = folder_id
+                                st.info(f"💡 {get_text('automatically_switched_to_folder').format(eng_category)}")
+                            st.rerun()
+                        else:
+                            error_msg = result.get("error", get_text('unknown_error'))
+                            st.error(f"❌ {get_text('classification_failed').format(error_msg)}")
                     else:
-                        error_msg = result.get("error", get_text('unknown_error'))
-                        st.error(f"❌ {get_text('classification_failed').format(error_msg)}")
+                        st.warning(get_text("unable_to_determine_classification"))
                 else:
                     st.warning(get_text("unable_to_determine_classification"))
             else:
