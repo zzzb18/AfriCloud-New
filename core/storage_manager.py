@@ -439,6 +439,64 @@ class CloudStorageManager:
             return category
         # 否则返回Unclassified作为默认值
         return "Unclassified"
+    
+    def _extract_classification_from_ai_response(self, ai_response: str, extracted_text: str) -> Optional[Dict[str, Any]]:
+        """从DeepSeek AI响应中提取行业分类"""
+        try:
+            import re
+            
+            # 定义行业关键词映射（英文和中文）
+            industry_keywords_map = {
+                "Planting": ["planting", "crop", "agriculture", "farming", "cultivation", "种植", "作物", "农业", "耕作"],
+                "Livestock": ["livestock", "animal", "cattle", "poultry", "livestock farming", "畜牧业", "动物", "养殖"],
+                "Inputs-Soil": ["soil", "fertilizer", "agricultural inputs", "soil testing", "农资", "土壤", "肥料", "施肥"],
+                "Agri-Finance": ["finance", "financial", "insurance", "credit", "loan", "金融", "保险", "信贷"],
+                "SupplyChain-Storage": ["supply chain", "storage", "logistics", "warehouse", "供应链", "仓储", "物流"],
+                "Climate-RemoteSensing": ["climate", "weather", "remote sensing", "NDVI", "EVI", "气候", "遥感", "气象"],
+                "Agri-IoT": ["IoT", "internet of things", "sensor", "irrigation", "物联网", "传感器", "灌溉"]
+            }
+            
+            # 将AI响应和提取的文本合并进行分析
+            combined_text = (ai_response + " " + extracted_text).lower()
+            
+            # 计算每个行业的匹配分数
+            category_scores = {}
+            for category, keywords in industry_keywords_map.items():
+                score = 0
+                for keyword in keywords:
+                    # 计算关键词出现次数（加权）
+                    count = combined_text.count(keyword.lower())
+                    if count > 0:
+                        score += count * (2 if len(keyword) > 4 else 1)  # 长关键词权重更高
+                category_scores[category] = score
+            
+            # 找到得分最高的分类
+            if category_scores and max(category_scores.values()) > 0:
+                best_category = max(category_scores, key=category_scores.get)
+                max_score = category_scores[best_category]
+                
+                # 计算置信度（基于得分和文本长度）
+                total_keywords = len(industry_keywords_map[best_category])
+                confidence = min(max_score / (total_keywords * 2), 1.0)
+                
+                # 如果置信度太低，返回未分类
+                if confidence < 0.15:
+                    print(f"[DEBUG] _extract_classification_from_ai_response: 置信度太低 ({confidence:.2f})，返回未分类")
+                    return {"category": "Unclassified", "confidence": 0.0, "method": "AI Response (Low Confidence)"}
+                
+                print(f"[DEBUG] _extract_classification_from_ai_response: 从AI响应中提取分类: {best_category}, 置信度: {confidence:.2f}")
+                return {
+                    "category": best_category,
+                    "confidence": confidence,
+                    "method": "AI Response Analysis"
+                }
+            else:
+                print(f"[DEBUG] _extract_classification_from_ai_response: 无法从AI响应中提取分类")
+                return None
+                
+        except Exception as e:
+            print(f"[DEBUG] _extract_classification_from_ai_response: 错误: {str(e)}")
+            return None
 
     def generate_smart_report(self, file_id: int) -> Dict[str, Any]:
         """生成智能报告和图表"""
@@ -2400,10 +2458,17 @@ Please provide detailed analysis results."""
                 
                 if ai_analysis:
                     # 解析AI返回的分析结果
-                    # 尝试提取行业分类
-                    classification = self.classify_industry(extracted_text)
+                    # 首先尝试从AI响应中提取行业分类
+                    classification = self._extract_classification_from_ai_response(ai_analysis, extracted_text)
+                    
+                    # 如果无法从AI响应中提取，使用本地分类方法
+                    if not classification or classification.get('category') == 'Unclassified' or classification.get('category') == '未分类':
+                        print(f"[DEBUG] analyze_file_with_ai: 无法从AI响应中提取分类，使用本地分类方法")
+                        classification = self.classify_industry(extracted_text)
+                    
                     if isinstance(classification, dict) and 'category' in classification:
                         classification['category'] = self._to_english_category(classification['category'])
+                        print(f"[DEBUG] analyze_file_with_ai: 最终分类结果: {classification['category']}, 置信度: {classification.get('confidence', 0)}")
 
                     # 提取关键短语（作为备用）
                     key_phrases = self.extract_key_phrases(extracted_text)

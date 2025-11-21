@@ -292,27 +292,38 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
         if st.button(f"📁 {get_text('auto_classify')}", key=f"auto_classify_{file_id}", use_container_width=True):
             if ai_analysis:
                 category = ai_analysis.get('industry_category', 'Unclassified')
+                confidence = ai_analysis.get('confidence_score', 0)
+                
+                # 调试信息
+                print(f"[DEBUG] auto_classify: 原始分类: {category}, 置信度: {confidence}")
+                
                 # 统一转换为英文分类名称进行比较（数据库存储的是英文）
-                if category and category != 'Unclassified' and category != '未分类':
-                    # 确保分类名称是英文格式
-                    eng_category = storage_manager._to_english_category(category)
-                    if eng_category and eng_category != 'Unclassified':
-                        result = storage_manager.move_file_to_industry_folder(file_id, eng_category)
-                        if result.get("success"):
-                            folder_id = result.get("folder_id")
-                            st.success(f"✅ {get_text('file_moved_to').format(eng_category)}")
-                            # Automatically switch to the corresponding folder
-                            if folder_id:
-                                st.session_state.current_folder_id = folder_id
-                                st.info(f"💡 {get_text('automatically_switched_to_folder').format(eng_category)}")
-                            st.rerun()
-                        else:
-                            error_msg = result.get("error", get_text('unknown_error'))
-                            st.error(f"❌ {get_text('classification_failed').format(error_msg)}")
+                eng_category = storage_manager._to_english_category(category) if category else 'Unclassified'
+                print(f"[DEBUG] auto_classify: 转换后分类: {eng_category}")
+                
+                if eng_category and eng_category != 'Unclassified':
+                    # 检查置信度（如果置信度太低，给出警告但仍然尝试分类）
+                    if confidence and confidence < 0.2:
+                        st.warning(f"⚠️ Low confidence ({confidence:.1%}), but attempting classification...")
+                    
+                    result = storage_manager.move_file_to_industry_folder(file_id, eng_category)
+                    if result.get("success"):
+                        folder_id = result.get("folder_id")
+                        st.success(f"✅ {get_text('file_moved_to').format(eng_category)}")
+                        # Automatically switch to the corresponding folder
+                        if folder_id:
+                            st.session_state.current_folder_id = folder_id
+                            st.info(f"💡 {get_text('automatically_switched_to_folder').format(eng_category)}")
+                        st.rerun()
+                    else:
+                        error_msg = result.get("error", get_text('unknown_error'))
+                        st.error(f"❌ {get_text('classification_failed').format(error_msg)}")
+                else:
+                    # 提供更详细的错误信息
+                    if category:
+                        st.warning(f"⚠️ {get_text('unable_to_determine_classification')} (Category: {category}, Confidence: {confidence:.1%} if available)")
                     else:
                         st.warning(get_text("unable_to_determine_classification"))
-                else:
-                    st.warning(get_text("unable_to_determine_classification"))
             else:
                 st.warning(get_text("please_perform_ai_analysis_first"))
     
