@@ -90,7 +90,7 @@ if 'viewing_file_id' not in st.session_state:
 # ==================== Left Sidebar Tabs ====================
 with st.sidebar:
     # Logo and title section
-    col_logo, col_text = st.columns([1, 2], gap="small")
+    col_logo, col_text = st.columns([1, 10], gap="small")
     with col_logo:
         st.markdown("<div style='padding-top: 8px;'>", unsafe_allow_html=True)
         st.image("logo.jpg", width=50, use_container_width=False)
@@ -151,6 +151,9 @@ with st.sidebar:
         if st.button(f"📊 {get_text('industry_view')}", key="tab_industry", use_container_width=True,
                      type="primary" if st.session_state.get('current_tab') == "Industry View" else "secondary"):
             st.session_state.current_tab = "Industry View"
+            # Clear viewing_file_id to ensure we show industry view instead of file preview
+            if 'viewing_file_id' in st.session_state:
+                st.session_state.viewing_file_id = None
             st.rerun()
     
     with col_tools:
@@ -244,11 +247,8 @@ if viewing_file_id:
     # 文件详情页
     render_file_preview_modal(storage_manager, viewing_file_id)
 elif current_tab == "Industry View":
-    # Industry view content
-    if st.session_state.get('selected_industry_category'):
-        render_industry_view(storage_manager)
-    else:
-        st.info(f"📊 {get_text('select_category_from_sidebar')}")
+    # Industry view content - always render, function handles both cases (with/without selected category)
+    render_industry_view(storage_manager)
 elif current_tab == "Tools":
     # Tools content
     st.markdown(f"### 🛠️ {get_text('tools')}")
