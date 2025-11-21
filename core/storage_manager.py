@@ -441,33 +441,54 @@ class CloudStorageManager:
         return "Unclassified"
     
     def _extract_classification_from_ai_response(self, ai_response: str, extracted_text: str) -> Optional[Dict[str, Any]]:
-        """从DeepSeek AI响应中提取行业分类"""
+        """从DeepSeek AI响应中提取行业分类，只返回与工业视图匹配的标签"""
         try:
             import re
             
-            # 定义行业关键词映射（英文和中文）
-            industry_keywords_map = {
-                "Planting": ["planting", "crop", "agriculture", "farming", "cultivation", "种植", "作物", "农业", "耕作"],
-                "Livestock": ["livestock", "animal", "cattle", "poultry", "livestock farming", "畜牧业", "动物", "养殖"],
-                "Inputs-Soil": ["soil", "fertilizer", "agricultural inputs", "soil testing", "农资", "土壤", "肥料", "施肥"],
-                "Agri-Finance": ["finance", "financial", "insurance", "credit", "loan", "金融", "保险", "信贷"],
-                "SupplyChain-Storage": ["supply chain", "storage", "logistics", "warehouse", "供应链", "仓储", "物流"],
-                "Climate-RemoteSensing": ["climate", "weather", "remote sensing", "NDVI", "EVI", "气候", "遥感", "气象"],
-                "Agri-IoT": ["IoT", "internet of things", "sensor", "irrigation", "物联网", "传感器", "灌溉"]
-            }
+            # 定义有效的分类标签（与工业视图一致）
+            valid_categories = ["Planting", "Livestock", "Inputs-Soil", "Agri-Finance", 
+                              "SupplyChain-Storage", "Climate-RemoteSensing", "Agri-IoT", "Unclassified"]
             
-            # 将AI响应和提取的文本合并进行分析
+            # 首先尝试使用正则表达式直接提取明确的分类声明
+            pattern = r'(?:Industry\s*(?:Classification|Category)?\s*:?\s*|分类\s*:?\s*)([A-Za-z-]+)'
+            match = re.search(pattern, ai_response, re.IGNORECASE)
+            if match:
+                category_name = match.group(1).strip()
+                # 标准化分类名称
+                category_mapping = {
+                    "planting": "Planting",
+                    "livestock": "Livestock",
+                    "inputs-soil": "Inputs-Soil",
+                    "inputsoil": "Inputs-Soil",
+                    "agri-finance": "Agri-Finance",
+                    "agrifinance": "Agri-Finance",
+                    "supplychain-storage": "SupplyChain-Storage",
+                    "supplychainstorage": "SupplyChain-Storage",
+                    "climate-remotesensing": "Climate-RemoteSensing",
+                    "climateremotesensing": "Climate-RemoteSensing",
+                    "agri-iot": "Agri-IoT",
+                    "agriiot": "Agri-IoT",
+                    "unclassified": "Unclassified"
+                }
+                normalized_category = category_mapping.get(category_name.lower())
+                if normalized_category and normalized_category in valid_categories:
+                    print(f"[DEBUG] _extract_classification_from_ai_response: 从AI响应中直接提取分类: {normalized_category}")
+                    return {
+                        "category": normalized_category,
+                        "confidence": 0.8,
+                        "method": "AI Response Direct Extraction"
+                    }
+            
+            # 如果无法直接提取，使用关键词匹配（使用与classify_industry相同的关键词）
             combined_text = (ai_response + " " + extracted_text).lower()
-            
-            # 计算每个行业的匹配分数
             category_scores = {}
-            for category, keywords in industry_keywords_map.items():
+            
+            for category, keywords in self.industry_keywords.items():
                 score = 0
                 for keyword in keywords:
-                    # 计算关键词出现次数（加权）
                     count = combined_text.count(keyword.lower())
                     if count > 0:
-                        score += count * (2 if len(keyword) > 4 else 1)  # 长关键词权重更高
+                        score += count
                 category_scores[category] = score
             
             # 找到得分最高的分类
@@ -475,28 +496,31 @@ class CloudStorageManager:
                 best_category = max(category_scores, key=category_scores.get)
                 max_score = category_scores[best_category]
                 
-                # 计算置信度（基于得分和文本长度）
-                total_keywords = len(industry_keywords_map[best_category])
-                confidence = min(max_score / (total_keywords * 2), 1.0)
+                # 计算置信度
+                total_keywords = len(self.industry_keywords[best_category])
+                confidence = min(max_score / (total_keywords * 1.5), 1.0)
                 
-                # 如果置信度太低，返回未分类
-                if confidence < 0.15:
-                    print(f"[DEBUG] _extract_classification_from_ai_response: 置信度太低 ({confidence:.2f})，返回未分类")
+                # 如果置信度低于阈值，直接返回Unclassified
+                if confidence < 0.1:
+                    print(f"[DEBUG] _extract_classification_from_ai_response: 置信度太低 ({confidence:.2f})，返回Unclassified")
                     return {"category": "Unclassified", "confidence": 0.0, "method": "AI Response (Low Confidence)"}
                 
-                print(f"[DEBUG] _extract_classification_from_ai_response: 从AI响应中提取分类: {best_category}, 置信度: {confidence:.2f}")
+                # 转换为英文分类名称
+                eng_category = self._to_english_category(best_category)
+                
+                print(f"[DEBUG] _extract_classification_from_ai_response: 从AI响应中关键词匹配分类: {eng_category}, 置信度: {confidence:.2f}")
                 return {
-                    "category": best_category,
+                    "category": eng_category,
                     "confidence": confidence,
-                    "method": "AI Response Analysis"
+                    "method": "AI Response Keyword Matching"
                 }
             else:
-                print(f"[DEBUG] _extract_classification_from_ai_response: 无法从AI响应中提取分类")
-                return None
+                print(f"[DEBUG] _extract_classification_from_ai_response: 无法从AI响应中提取分类，返回Unclassified")
+                return {"category": "Unclassified", "confidence": 0.0, "method": "AI Response (No Match)"}
                 
         except Exception as e:
             print(f"[DEBUG] _extract_classification_from_ai_response: 错误: {str(e)}")
-            return None
+            return {"category": "Unclassified", "confidence": 0.0, "method": "AI Response (Error)"}
 
     def generate_smart_report(self, file_id: int) -> Dict[str, Any]:
         """生成智能报告和图表"""
@@ -1953,9 +1977,9 @@ Please answer the user's question based on the above file content."""
         return extracted_text
 
     def classify_industry(self, text: str) -> Dict[str, Any]:
-        """使用真正的AI对文档进行行业分类"""
+        """使用真正的AI对文档进行行业分类，返回与工业视图匹配的标签"""
         if not text:
-            return {"category": "未分类", "confidence": 0.0, "keywords": []}
+            return {"category": "Unclassified", "confidence": 0.0, "keywords": []}
 
         # 方法1: 使用BERT模型分类（如果可用）
         if self.text_classifier and len(text) > 10:
@@ -1979,11 +2003,13 @@ Please answer the user's question based on the above file content."""
                     'LABEL_6': '农业物联网'
                 }
 
-                mapped_category = label_mapping.get(bert_label, '未分类')
+                mapped_category = label_mapping.get(bert_label, 'Unclassified')
+                # 转换为英文分类名称
+                eng_category = self._to_english_category(mapped_category)
 
-                if mapped_category != '未分类':
+                if eng_category != 'Unclassified':
                     return {
-                        "category": mapped_category,
+                        "category": eng_category,
                         "confidence": bert_confidence,
                         "keywords": self._extract_keywords_from_text(text),
                         "method": "BERT"
@@ -2002,9 +2028,16 @@ Please answer the user's question based on the above file content."""
                 categories = list(self.industry_keywords.keys())
                 predicted_category = categories[y_pred[0]]
                 confidence = y_proba[0].max()
+                
+                # 如果置信度低于阈值，直接返回Unclassified
+                if confidence < 0.1:
+                    print(f"[DEBUG] classify_industry (ML): 置信度太低 ({confidence:.2f})，返回Unclassified")
+                    return {"category": "Unclassified", "confidence": 0.0, "keywords": [], "method": "ML"}
 
+                # 转换为英文分类名称
+                eng_category = self._to_english_category(predicted_category)
                 return {
-                    "category": predicted_category,
+                    "category": eng_category,
                     "confidence": confidence,
                     "keywords": self._extract_keywords_from_text(text),
                     "method": "ML"
@@ -2052,18 +2085,21 @@ Please answer the user's question based on the above file content."""
             total_keywords = len(self.industry_keywords[best_category])
             confidence = min(max_score / (total_keywords * 1.5), 1.0)
 
-            # 如果置信度太低，标记为未分类
+            # 降低置信度阈值（从0.1降到0.05），允许更多文件被分类
             if confidence < 0.1:
-                return {"category": "未分类", "confidence": 0.0, "keywords": [], "method": "关键词匹配"}
+                print(f"[DEBUG] classify_industry: 置信度太低 ({confidence:.2f})，返回Unclassified")
+                return {"category": "Unclassified", "confidence": 0.0, "keywords": [], "method": "关键词匹配"}
 
+            # 转换为英文分类名称
+            eng_category = self._to_english_category(best_category)
             return {
-                "category": best_category,
+                "category": eng_category,
                 "confidence": confidence,
                 "keywords": matched_keywords[best_category],
                 "method": "智能关键词匹配"
             }
 
-        return {"category": "未分类", "confidence": 0.0, "keywords": [], "method": "无匹配"}
+        return {"category": "Unclassified", "confidence": 0.0, "keywords": [], "method": "无匹配"}
 
     def _get_synonyms(self, category: str) -> List[str]:
         """获取行业分类的同义词"""
@@ -2431,12 +2467,22 @@ Please answer the user's question based on the above file content."""
 
             # 如果配置了DeepSeek API，使用AI分析
             if self.deepseek_api_key:
-                # 构建分析提示词
-                system_prompt = """You are a professional document analysis assistant. Please analyze the user's uploaded file and provide the following information:
+                # 构建分析提示词 - 明确要求返回行业分类
+                system_prompt = """You are a professional document analysis assistant. Please analyze the user's uploaded file and provide the following information in a structured format:
 1. File type and main content overview
-2. Industry classification (e.g., Agriculture, Manufacturing, Healthcare, Education, Finance, Construction, Technology, etc.)
+2. Industry classification: Please classify this document into ONE of these categories:
+   - Planting (crop cultivation, agriculture, farming)
+   - Livestock (animal husbandry, cattle, poultry)
+   - Inputs-Soil (fertilizer, soil testing, agricultural inputs)
+   - Agri-Finance (agricultural finance, insurance, credit)
+   - SupplyChain-Storage (supply chain, logistics, warehouse)
+   - Climate-RemoteSensing (climate, weather, remote sensing, NDVI, EVI)
+   - Agri-IoT (IoT sensors, irrigation, smart agriculture)
+   If none of these categories fit, respond with "Unclassified"
 3. Key information extraction
 4. File summary (within 200 words)
+
+IMPORTANT: Please clearly state the industry classification in your response, for example: "Industry Classification: Planting" or "Industry: Livestock"
 
 Please answer in English, with clear and organized format."""
 
@@ -2446,7 +2492,7 @@ Please answer in English, with clear and organized format."""
 
 {extracted_text_limited}
 
-Please provide detailed analysis results."""
+Please provide detailed analysis results, and clearly state the Industry Classification."""
 
                 messages = [
                     {"role": "system", "content": system_prompt},
