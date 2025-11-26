@@ -607,7 +607,22 @@ class CloudStorageManager:
             if response.status_code == 200:
                 result = response.json()
                 if 'choices' in result and len(result['choices']) > 0:
-                    return result['choices'][0]['message']['content']
+                    choice = result['choices'][0]
+                    content = choice['message']['content']
+                    
+                    # 检查响应是否完整
+                    finish_reason = choice.get('finish_reason', '')
+                    if finish_reason == 'length':
+                        # 响应因达到max_tokens限制而被截断
+                        st.warning("⚠️ AI response was truncated due to token limit. Consider increasing max_tokens or asking a more specific question.")
+                        # 仍然返回内容，但添加提示
+                        return content + "\n\n[Note: Response may be incomplete due to token limit]"
+                    elif finish_reason == 'stop':
+                        # 正常完成
+                        return content
+                    else:
+                        # 其他情况，仍然返回内容
+                        return content
                 else:
                     st.warning(f"API response format abnormal: {result}")
                     return None
@@ -954,9 +969,9 @@ Please answer the user's question based on the above file content."""
                 {"role": "user", "content": user_prompt}
             ]
 
-            # 调用DeepSeek API
+            # 调用DeepSeek API - 增加max_tokens以确保完整响应
             with st.spinner("🤔 DeepSeek AI is analyzing the file and generating response..."):
-                ai_response = self.call_deepseek_api(messages, max_tokens=3000, temperature=0.7)
+                ai_response = self.call_deepseek_api(messages, max_tokens=4000, temperature=0.7)
             
             generation_time = time.time() - start_time
 
@@ -2486,21 +2501,21 @@ IMPORTANT: Please clearly state the industry classification in your response, fo
 
 Please answer in English, with clear and organized format."""
 
-                # 限制长度避免超出token限制
-                extracted_text_limited = extracted_text[:6000]
+                # 限制长度避免超出token限制（增加到8000以提供更多上下文）
+                extracted_text_limited = extracted_text[:8000]
                 user_prompt = f"""Please analyze the following file content:
 
 {extracted_text_limited}
 
-Please provide detailed analysis results, and clearly state the Industry Classification."""
+Please provide detailed analysis results, and clearly state the Industry Classification. Make sure to provide a complete and comprehensive analysis."""
 
                 messages = [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ]
 
-                # 调用DeepSeek API
-                ai_analysis = self.call_deepseek_api(messages, max_tokens=2000, temperature=0.7)
+                # 调用DeepSeek API - 增加max_tokens以确保完整响应
+                ai_analysis = self.call_deepseek_api(messages, max_tokens=4000, temperature=0.7)
                 
                 if ai_analysis:
                     # 解析AI返回的分析结果

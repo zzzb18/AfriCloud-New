@@ -228,7 +228,7 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
         return None
     
     try:
-        # 使用已加载的模型（如果未加载则加载tiny模型，更小更省内存）
+        # 使用已加载的模型（如果未加载则加载base模型，平衡速度和准确度）
         if 'whisper_model' not in st.session_state:
             # 检查模型加载失败标记
             if st.session_state.get('whisper_load_failed', False):
@@ -237,12 +237,12 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
                 return None
             
             # 如果模型未加载，尝试加载（延迟加载）
-            print("[DEBUG] 开始延迟加载Whisper模型（tiny模型）...")
+            print("[DEBUG] 开始延迟加载Whisper模型（base模型）...")
             
             # 检查模型文件是否存在
             import time
             cache_dir = os.path.expanduser("~/.cache/whisper")
-            model_path = os.path.join(cache_dir, "tiny.pt")
+            model_path = os.path.join(cache_dir, "base.pt")
             
             if os.path.exists(model_path):
                 model_size = os.path.getsize(model_path) / (1024 * 1024)  # MB
@@ -255,13 +255,13 @@ def _transcribe_with_whisper(audio_data: bytes) -> Optional[str]:
             start_time = time.time()
             
             try:
-                with st.spinner("🔄 正在加载Whisper模型（tiny模型，内存占用更小）..."):
-                    print("[DEBUG] 调用 whisper.load_model('tiny')...")
+                with st.spinner("🔄 正在加载Whisper模型（base模型，平衡速度和准确度）..."):
+                    print("[DEBUG] 调用 whisper.load_model('base')...")
                     # 强制刷新输出，确保日志立即显示
                     import sys
                     sys.stdout.flush()
                     
-                    st.session_state.whisper_model = whisper.load_model("tiny")
+                    st.session_state.whisper_model = whisper.load_model("base")
                     
                     load_time = time.time() - start_time
                     print(f"[DEBUG] ✅ Whisper模型加载成功，耗时: {load_time:.2f}秒")
