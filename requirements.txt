@@ -17,27 +17,9 @@ pytesseract>=0.3.10
 # macOS: brew install tesseract
 # Windows: 下载安装 https://github.com/UB-Mannheim/tesseract/wiki
 
-# 机器学习支持（可选）
-scikit-learn>=1.2.0
-
-# 深度学习支持（可选）
-transformers>=4.30.0
-torch>=2.0.0
-
-# OpenAI支持（可选）
-openai>=1.0.0
 
 # Excel支持
 openpyxl>=3.1.0
 xlrd>=2.0.0
 
-# Word文档支持（可选）
-python-docx>=0.8.11
-
-# 语音识别支持（可选）
-openai-whisper>=20231117
-SpeechRecognition>=3.10.0
-pydub>=0.25.1  # 用于音频格式转换（WebM转WAV）
-# 注意：pyaudio在某些系统上可能需要额外配置，如果安装失败可以跳过
-# pyaudio>=0.2.11
 
