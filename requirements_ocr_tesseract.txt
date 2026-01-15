@@ -1,0 +1,11 @@
+# Tesseract OCR 依赖（轻量级，推荐）
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# 注意：还需要系统安装Tesseract OCR
+# Ubuntu/Debian: sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim
+# macOS: brew install tesseract
+# Windows: 下载安装 https://github.com/UB-Mannheim/tesseract/wiki
+
+# EasyOCR（备用，内存占用较大）
+# easyocr>=1.7.0

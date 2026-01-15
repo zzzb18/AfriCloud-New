@@ -35,7 +35,8 @@ except ImportError:
 from config.settings import INDUSTRY_KEYWORDS, INDUSTRY_ENGLISH_MAPPING
 from utils.dependencies import (
     PDF_AVAILABLE, OCR_AVAILABLE, ML_AVAILABLE, 
-    TRANSFORMERS_AVAILABLE, OPENAI_AVAILABLE
+    TRANSFORMERS_AVAILABLE, OPENAI_AVAILABLE,
+    TESSERACT_AVAILABLE
 )
 
 # 导入PDF支持库
@@ -47,14 +48,17 @@ if PDF_AVAILABLE:
 else:
     fitz = None
 
-# 导入OCR支持库
-if OCR_AVAILABLE:
+# 导入OCR支持库 - 仅使用Tesseract OCR
+if TESSERACT_AVAILABLE:
     try:
-        import easyocr
+        import pytesseract
+        from PIL import Image
     except ImportError:
-        easyocr = None
+        pytesseract = None
+        Image = None
 else:
-    easyocr = None
+    pytesseract = None
+    Image = None
 
 class CloudStorageManager:
     def __init__(self):
@@ -233,13 +237,27 @@ class CloudStorageManager:
         self.deepseek_model = "deepseek-chat"  # 或 "deepseek-coder" 用于代码生成
         # 注意：如果使用DeepSeek-V3，模型名称应为 "deepseek-chat"
 
-        # 初始化OCR模型 - 延迟加载，避免启动时内存不足导致进程被杀死
-        self.ocr_reader = None
-        self.ocr_loading = False
+        # 初始化OCR - 仅使用Tesseract OCR（轻量级，无需加载模型）
+        self.ocr_available = TESSERACT_AVAILABLE
         self.ocr_load_failed = False
-        print(f"[DEBUG] OCR初始化 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}")
-        print(f"[DEBUG] OCR模型将延迟加载（仅在需要时加载，避免启动时内存不足）")
-        # 不再在初始化时加载OCR模型，改为延迟加载
+        
+        if TESSERACT_AVAILABLE:
+            print(f"[DEBUG] ✅ OCR初始化 - 使用Tesseract OCR（轻量级，内存占用约50-100MB，无需加载模型）")
+        else:
+            import platform
+            system = platform.system()
+            print(f"[DEBUG] ⚠️ OCR初始化 - Tesseract不可用")
+            if system == "Windows":
+                print(f"[DEBUG] 💡 Windows安装说明:")
+                print(f"[DEBUG]    1. 下载安装: https://github.com/UB-Mannheim/tesseract/wiki")
+                print(f"[DEBUG]    2. 安装时选择中文语言包")
+                print(f"[DEBUG]    3. 添加到系统PATH")
+                print(f"[DEBUG]    4. 详细说明: INSTALL_TESSERACT_WINDOWS.md")
+            elif system == "Linux":
+                print(f"[DEBUG] 💡 Linux安装: sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim")
+            elif system == "Darwin":  # macOS
+                print(f"[DEBUG] 💡 macOS安装: brew install tesseract")
+            print(f"[DEBUG] 💡 Python依赖: pip install pytesseract Pillow")
 
         # 初始化文本分类模型
         self.text_classifier = None
@@ -663,7 +681,7 @@ class CloudStorageManager:
         
         处理逻辑：
         1. 文档类（.txt, .docx等）：直接读取文档内容，结合用户问题提问
-        2. 图片或PDF：先用本地easyocr进行提取，然后结合用户问题发给deepseek
+        2. 图片或PDF：先用Tesseract OCR进行提取，然后结合用户问题发给deepseek
         3. Excel或xlsx：保留原来的分析程序
         """
         try:
@@ -730,7 +748,7 @@ class CloudStorageManager:
                     file_content += f"Filename: {filename}\n\n"
                     file_content += f"OCR Recognized Text:\n{ocr_text}"
                     st.info("✅ 使用已保存的OCR内容（无需重新识别）")
-                elif OCR_AVAILABLE and easyocr is not None:
+                elif OCR_AVAILABLE and TESSERACT_AVAILABLE:
                     # 数据库中没有OCR内容，执行OCR提取
                     print(f"[DEBUG] generate_ai_report: 数据库中没有OCR内容，开始执行OCR提取")
                 
@@ -785,7 +803,7 @@ class CloudStorageManager:
                                                 # 对每页进行OCR
                                                 print(f"[DEBUG] generate_ai_report: 处理PDF第 {page_num + 1} 页...")
                                                 try:
-                                                    page_results = self.ocr_reader.readtext(temp_img.name)
+                                                    page_results = self._ocr_readtext(temp_img.name)
                                                     
                                                     if page_results and len(page_results) > 0:
                                                         page_text = ' '.join([result[1] for result in page_results])
@@ -885,7 +903,7 @@ class CloudStorageManager:
                                 
                                 try:
                                     with st.spinner("🔍 Recognizing text in image..."):
-                                        results = self.ocr_reader.readtext(ocr_file_path)
+                                        results = self._ocr_readtext(ocr_file_path)
                                     print(f"[DEBUG] generate_ai_report: OCR识别完成，结果数量: {len(results) if results else 0}")
                                 except MemoryError as e:
                                     print(f"[DEBUG] generate_ai_report: OCR识别内存不足: {str(e)}")
@@ -927,8 +945,8 @@ class CloudStorageManager:
                     print(f"[DEBUG] generate_ai_report: OCR不可用")
                     file_content = f"File Type: {'Image' if file_type == 'image' else 'PDF'}\n"
                     file_content += f"Filename: {filename}\n"
-                    file_content += f"Note: OCR feature unavailable, unable to recognize text in file. Please install easyocr: pip install easyocr"
-                    st.warning("⚠️ OCR feature unavailable, please install easyocr")
+                    file_content += f"Note: OCR feature unavailable, unable to recognize text in file. Please install Tesseract OCR. See INSTALL_TESSERACT.md for details."
+                    st.warning("⚠️ OCR feature unavailable. Please install Tesseract OCR. See INSTALL_TESSERACT.md for details.")
             
             # ========== 逻辑3: 文档类文件 - 直接读取文档内容 ==========
             else:
@@ -1936,9 +1954,9 @@ Please answer the user's question based on the above file content."""
                 # 图片文件 - OCR识别
                 print(f"[DEBUG] 开始处理图片文件: {filename}")
                 print(f"[DEBUG] 文件路径: {file_path}")
-                print(f"[DEBUG] OCR状态 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}, ocr_reader: {self.ocr_reader is not None}")
+                print(f"[DEBUG] OCR状态 - OCR_AVAILABLE: {OCR_AVAILABLE}, TESSERACT: {TESSERACT_AVAILABLE}")
                 
-                if OCR_AVAILABLE and easyocr is not None:
+                if OCR_AVAILABLE and TESSERACT_AVAILABLE:
                     # 延迟加载OCR模型
                     if not self._load_ocr_model():
                         print("[DEBUG] OCR模型加载失败，跳过OCR提取")
@@ -1947,8 +1965,8 @@ Please answer the user's question based on the above file content."""
                         # OCR模型已加载，进行识别
                         print(f"[DEBUG] OCR模型已加载，开始识别图片: {file_path}")
                         try:
-                            print("[DEBUG] 调用 ocr_reader.readtext()...")
-                            results = self.ocr_reader.readtext(file_path)
+                            print("[DEBUG] 调用 _ocr_readtext()...")
+                            results = self._ocr_readtext(file_path)
                             print(f"[DEBUG] OCR识别完成，返回结果数量: {len(results) if results else 0}")
                             
                             if results and len(results) > 0:
@@ -1977,9 +1995,9 @@ Please answer the user's question based on the above file content."""
                             extracted_text = ""
                 else:
                     # OCR不可用，提示用户
-                    print(f"[DEBUG] OCR不可用 - OCR_AVAILABLE: {OCR_AVAILABLE}, easyocr: {easyocr is not None}")
-                    if not OCR_AVAILABLE:
-                        st.warning("⚠️ OCR feature unavailable, please install easyocr: pip install easyocr")
+                    print(f"[DEBUG] OCR不可用 - OCR_AVAILABLE: {OCR_AVAILABLE}, TESSERACT: {TESSERACT_AVAILABLE}")
+                    if not OCR_AVAILABLE or not TESSERACT_AVAILABLE:
+                        st.warning("⚠️ OCR feature unavailable. Please install Tesseract OCR. See INSTALL_TESSERACT.md for details.")
                     extracted_text = ""
 
         except Exception as e:
@@ -2276,58 +2294,56 @@ Please answer the user's question based on the above file content."""
             return text[:max_length] + "..." if len(text) > max_length else text
 
     def _load_ocr_model(self):
-        """延迟加载OCR模型（带错误处理和内存保护）"""
-        if self.ocr_reader is not None:
-            return True
+        """检查OCR是否可用（Tesseract无需加载模型）"""
+        # 检查是否禁用OCR
+        import os
+        if os.getenv('DISABLE_OCR', '').lower() in ('1', 'true', 'yes'):
+            print("[DEBUG] OCR已通过环境变量禁用")
+            self.ocr_load_failed = True
+            return False
         
         if self.ocr_load_failed:
-            print("[DEBUG] OCR模型之前加载失败，跳过重试")
+            print("[DEBUG] OCR之前检查失败，跳过重试")
             return False
         
-        if not OCR_AVAILABLE or easyocr is None:
-            print("[DEBUG] OCR库不可用")
+        if not OCR_AVAILABLE or not TESSERACT_AVAILABLE:
+            print("[DEBUG] Tesseract OCR不可用")
             return False
         
-        if self.ocr_loading:
-            print("[DEBUG] OCR模型正在加载中，请等待...")
-            return False
+        # Tesseract不需要加载模型，直接可用
+        print("[DEBUG] ✅ Tesseract OCR可用（无需加载模型，轻量级）")
+        return True
+    
+    def _ocr_readtext(self, image_path: str):
+        """OCR识别接口 - 使用Tesseract OCR"""
+        if not self._load_ocr_model():
+            return []
         
         try:
-            self.ocr_loading = True
-            print("[DEBUG] 开始延迟加载OCR模型...")
+            # 使用Tesseract OCR
+            import pytesseract
+            from PIL import Image
             
-            # 检查是否禁用OCR（通过环境变量）
+            # 读取图片
+            img = Image.open(image_path)
+            
+            # 检测语言
             import os
-            if os.getenv('DISABLE_OCR', '').lower() in ('1', 'true', 'yes'):
-                print("[DEBUG] OCR已通过环境变量禁用")
-                self.ocr_load_failed = True
-                return False
+            lang = 'chi_sim+eng' if os.getenv('ENABLE_CHINESE_OCR', '').lower() in ('1', 'true', 'yes') else 'eng'
             
-            # 默认只加载英文模型（更轻量，减少内存占用）
-            # 如果需要中文，可以通过环境变量 ENABLE_CHINESE_OCR=true 启用
-            enable_chinese = os.getenv('ENABLE_CHINESE_OCR', '').lower() in ('1', 'true', 'yes')
-            languages = ['ch_sim', 'en'] if enable_chinese else ['en']
+            # 识别文字
+            text = pytesseract.image_to_string(img, lang=lang)
             
-            print(f"[DEBUG] 加载OCR模型，语言: {languages}")
-            with st.spinner("🔄 Loading OCR model (this may take a moment and use significant memory)..."):
-                self.ocr_reader = easyocr.Reader(languages, gpu=False)  # 强制使用CPU，避免GPU内存问题
-            print("[DEBUG] ✅ OCR模型加载成功")
-            return True
-        except MemoryError as e:
-            print(f"[DEBUG] ❌ OCR模型加载失败 - 内存不足: {str(e)}")
-            self.ocr_load_failed = True
-            st.error("❌ OCR model loading failed: Insufficient memory. Please consider using a server with more RAM or disable OCR via environment variable DISABLE_OCR=1")
-            return False
+            # 转换为统一格式: [(bbox, text, confidence)]
+            # Tesseract只返回文字，没有坐标信息，bbox设为None，confidence设为1.0
+            if text.strip():
+                return [(None, text.strip(), 1.0)]
+            return []
         except Exception as e:
-            print(f"[DEBUG] ❌ OCR模型加载失败: {str(e)}")
-            print(f"[DEBUG] 错误类型: {type(e).__name__}")
+            print(f"[DEBUG] Tesseract OCR识别失败: {str(e)}")
             import traceback
             print(f"[DEBUG] 错误堆栈:\n{traceback.format_exc()}")
-            self.ocr_load_failed = True
-            st.warning(f"⚠️ OCR model loading failed: {str(e)}")
-            return False
-        finally:
-            self.ocr_loading = False
+            return []
     
     def extract_ocr_content(self, file_id: int) -> Optional[str]:
         """提取图片或PDF的OCR内容（用于保存到数据库）"""
@@ -2376,7 +2392,7 @@ Please answer the user's question based on the above file content."""
                         temp_img.close()
                         
                         try:
-                            page_results = self.ocr_reader.readtext(temp_img.name)
+                            page_results = self._ocr_readtext(temp_img.name)
                             if page_results and len(page_results) > 0:
                                 page_text = ' '.join([result[1] for result in page_results])
                                 all_ocr_text.append(f"Page {page_num + 1}:\n{page_text}")
@@ -2432,7 +2448,7 @@ Please answer the user's question based on the above file content."""
                         print(f"[DEBUG] extract_ocr_content: 图片已缩放至: {new_width}x{new_height}")
                     
                     try:
-                        results = self.ocr_reader.readtext(ocr_file_path)
+                        results = self._ocr_readtext(ocr_file_path)
                         if results and len(results) > 0:
                             ocr_content = ' '.join([result[1] for result in results])
                     except MemoryError as e:

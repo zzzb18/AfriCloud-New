@@ -10,8 +10,12 @@ seaborn>=0.12.0
 # PDF支持（可选）
 PyMuPDF>=1.23.0
 
-# OCR支持（可选）
-easyocr>=1.7.0
+# OCR支持（可选）- 仅使用Tesseract OCR（轻量级，避免内存溢出）
+pytesseract>=0.3.10
+# 注意：还需要系统安装Tesseract OCR
+# Ubuntu/Debian: sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim
+# macOS: brew install tesseract
+# Windows: 下载安装 https://github.com/UB-Mannheim/tesseract/wiki
 
 # 机器学习支持（可选）
 scikit-learn>=1.2.0
