@@ -23,6 +23,13 @@ except ImportError:
 # Page configuration
 st.set_page_config(**PAGE_CONFIG)
 
+# 初始化会话状态
+if 'uploaded_files' not in st.session_state:
+    st.session_state.uploaded_files = {}  # 存储上传的文件信息
+
+if 'active_file' not in st.session_state:
+    st.session_state.active_file = None  # 当前选中的文件
+
 # Application styles
 st.markdown(CSS_STYLES, unsafe_allow_html=True)
 
