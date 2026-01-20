@@ -162,7 +162,7 @@ def render_file_preview_modal(storage_manager: CloudStorageManager, file_id: int
     
     # AI Q&A area
     st.markdown(f"#### 💬 {get_text('ask_ai')}")
-    
+
     # 输入框和麦克风按钮布局
     col_text, col_mic = st.columns([5, 1])
     
