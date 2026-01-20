@@ -429,7 +429,5 @@ def render_upload_section(storage_manager: CloudStorageManager):
     
     # 页脚信息
     st.markdown("---")
-    st.write(
-    
-        "支持格式: TXT, CSV, PDF, Word, Excel, PPT, 图片(PDF, JPG, PNG等) | 使用 Deepseek API 和 PaddleOCR 提供技术支持")
+    st.write("支持格式: TXT, CSV, PDF, Word, Excel, PPT, 图片(PDF, JPG, PNG等) | 使用 Deepseek API 和 PaddleOCR 提供技术支持")
     
